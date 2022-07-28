@@ -1,0 +1,12 @@
+*.spec
+*.log
+build
+buildExe.cmd
+runme.cmd
+*input/
+*output/
+*.csv
+__pycache__/
+conf.json
+*.zip
+*.7z
