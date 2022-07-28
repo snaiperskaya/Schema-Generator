@@ -3,7 +3,7 @@
 """schema_generator.py: Main module to parse csv and generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.07.27.0"
+__version__ = "22.07.28.1"
 
 import logging
 import os
@@ -299,6 +299,10 @@ def main():
         # Log error and do not update cleandir
         except OSError as e: 
             logger.error(f'Error deleting output directory: {e.strerror}')
+    # No output directory, create and continue
+    else:
+        os.makedirs(outputDir)
+        cleandir = True
     # If successfully deleted and recreated the output directory, continue
     if cleandir: 
         # Read Schema CSV (grantFile = False default invoked)
