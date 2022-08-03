@@ -3,7 +3,7 @@
 """schema_generator.py: Main module to parse csv and generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.07.28.1"
+__version__ = "22.08.03.0"
 
 import logging
 import os
@@ -266,8 +266,13 @@ def processTable(table: Table):
         # If column needs a sequence, generate scripts 
         # Flag for if sequence needs to be populated by trigger and generate that script as well
         if col.sequenced:
-            logger.debug(f'{table.name}.{col.field} has an assigned Sequence. Trigger-fired = {col.triggered}')
-            sql.writeSequenceScript(table.schema, table.name, col.field, col.sequencestart, col.triggered)
+            if col.sequencetouse == None:
+                logger.debug(f'{table.name}.{col.field} has an assigned Sequence. Trigger-fired = {col.triggered}')
+                sql.writeSequenceScript(table.schema, table.name, col.field, col.sequencestart, col.triggered)
+            # If reusing sequence, nothing to do unless trigger population is requested
+            elif col.triggered:
+                logger.debug(f'{table.name}.{col.field} is re-using sequence {col.sequencetouse}. Trigger-fired = {col.triggered}')
+                sql.writeTriggerScript(table.schema, table.name, col.field, col.sequencetouse)
         
         # If column has a foreign key source table defined, generate FK scripts
         # Only need to check for FK Table because field is implied due to column loading logic

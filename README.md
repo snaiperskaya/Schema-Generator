@@ -9,7 +9,7 @@ Currently generates the following scripts:
     - LOB handling with options
 	- Virtual columns
 - Primary key (including index and constraint; compound keys)
-- Sequences (including custom start value and trigger population)
+- Sequences (including custom start value, sequence recycling, and trigger population)
 - Additional Unique (with constraint) or Non-Unique Indexes
 - Compound Indexes
 - Foreign key constraints
@@ -47,7 +47,11 @@ Currently generates the following scripts:
 	- 'Virtual Expression' is only used if 'Virtual' = 'Y'
 		- This is the expression used to calculate a virtual column. Should be a valid SQL expression.
 		- WARNING: SQL Expression is not parsed for validity. Table script could fail to run if expression is not valid
-    - 'Sequence start' accepts an integer to denote the first value used in the sequence
+    - 'Sequence start' accepts:
+        - An integer to denote the first value used in a new sequence 
+        - A string that is the name of another sequence in the same schema (either existing or to be created)
+            - New sequences are named '[tablename]_[fieldname]_SEQ', if you wish to predict the name of a sequence to be created elsewhere in the schema to reuse
+            - NOTE: Nothing is done to link the sequence unless 'Pop by Trigger' is also 'Y'
     - 'Default' accepts some keywords (SYSDATE, USER, etc.) and will convert other values for CHAR and VARCHAR2 fields to strings
     - 'FK to Table' and 'FK to field' allow for foreign key creation
         - Both must be filled in to register

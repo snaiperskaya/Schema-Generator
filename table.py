@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.07.27.0"
+__version__ = "22.08.03.0"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -470,6 +470,8 @@ class Column:
         Flag for whether the field should have a sequence assigned
     sequencestart: int
         Starting value for assigned sequence
+    sequencetouse: str
+        Existing (or created sequence) to reuse for this field (must be in same schema)
     triggered: bool
         Flag for whether sequence should be populated by a trigger on insert
     virtual: bool
@@ -526,6 +528,7 @@ class Column:
         self.unique = False
         self.sequenced = False
         self.sequencestart = 1
+        self.sequencetouse = None
         self.triggered = False
         self.virtual = False
         self.virtualexpr = None
@@ -613,6 +616,13 @@ class Column:
         if csvrow["sequence_start"].isdigit():
             self.sequenced = True
             self.sequencestart = int(csvrow["sequence_start"])
+            # If trigger flag is Y, mark triggered = True
+            if csvrow["pop_by_trigger"].upper() == 'Y':
+                self.triggered = True
+        # If sequence field has some other string, assume this is the name of another sequence to use
+        elif csvrow["sequence_start"] != '':
+            self.sequenced = True
+            self.sequencetouse = csvrow["sequence_start"]
             # If trigger flag is Y, mark triggered = True
             if csvrow["pop_by_trigger"].upper() == 'Y':
                 self.triggered = True
