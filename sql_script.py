@@ -3,7 +3,7 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.05.0"
+__version__ = "22.08.05.1"
 
 import os
 import logging 
@@ -874,7 +874,7 @@ def saveHistoryProcedure(schema: str, tablename: str, columns: list) -> str:
     history['body'].append(to_save_body)
 
     # Return procedure name so it can be used in Trigger call
-    return proc_name
+    return f'{schema}.{tablespace}_HISTORY.{proc_name}'
 
 
 def writeHistoryPackage(outdirectory: str = outputDir):
