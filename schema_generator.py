@@ -3,7 +3,7 @@
 """schema_generator.py: Main module to parse csv and generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.03.0"
+__version__ = "22.08.05.0"
 
 import logging
 import os
@@ -113,12 +113,12 @@ def convertToDict(csvrow: tuple, grantFile: bool) -> dict:
 
     d = {}
     if grantFile:
-        d['schema'] = csvrow[0]
-        d['table'] = csvrow[1]
-        d['user'] = csvrow[2]
-        d['insert'] = csvrow[3]
-        d['update'] = csvrow[4]
-        d['delete'] = csvrow[5]
+        d['schema'] = csvrow[0].strip()
+        d['table'] = csvrow[1].strip()
+        d['user'] = csvrow[2].strip()
+        d['insert'] = csvrow[3].strip()
+        d['update'] = csvrow[4].strip()
+        d['delete'] = csvrow[5].strip()
     
     # Process as Schema type file
     else:
@@ -127,7 +127,7 @@ def convertToDict(csvrow: tuple, grantFile: bool) -> dict:
         index = 0
         try:
             for key in d.keys():
-                d[key] = csvrow[index]
+                d[key] = csvrow[index].strip()
                 index += 1
         except:
             logger.error(f'CSV File is missing columns. Columns expected: {schema_headers}')
@@ -237,14 +237,14 @@ def processTable(table: Table):
     # If table has multiple PKs defined, create compound key scripts
     if table.hasCompoundPK():
         logger.debug(f'Table {table.name} has a compound primary key')
-        sql.writeCompoundIndexScript(table.schema, table.name, table.tablespace, table.getPKFields())
+        sql.writeCompoundIndexScript(table.schema, table.name, table.tablespace, table.getPKFields(), table.tableNumber)
     
     # If table has any compound indexes defined (after the cleanup), create scripts
     if table.hasCompoundIndex():
         logger.debug(f'Table {table.name} has one or more compound indexes')
         indexFields = table.getIndexFields()
         for key in indexFields.keys():
-            sql.writeCompoundIndexScript(table.schema, table.name, table.tablespace, indexFields[key], indexcount, primaryKey = False, unique = table.isCompoundIndexUnique(key))
+            sql.writeCompoundIndexScript(table.schema, table.name, table.tablespace, indexFields[key], table.tableNumber, indexcount, primaryKey = False, unique = table.isCompoundIndexUnique(key))
             indexcount += 1
 
     # Write table script to file
@@ -256,11 +256,11 @@ def processTable(table: Table):
         # If table does not have compound PK and column is marked as PK, generate scripts for PK
         if col.primarykey and not table.hasCompoundPK():
             logger.debug(f'{table.name}.{col.field} is Primary Key')
-            sql.writeIndexScript(table.schema, table.name, table.tablespace, col.field, primaryKey = col.primarykey)
+            sql.writeIndexScript(table.schema, table.name, table.tablespace, col.field, table.tableNumber, primaryKey = col.primarykey)
         # If not PK, but marked as indexed, check if in compound index then process if not
         elif col.indexed and not table.isFieldInCompoundIndex(col.field):
             logger.debug(f'{table.name}.{col.field} is Indexed and unique = {col.unique}')
-            sql.writeIndexScript(table.schema, table.name, table.tablespace, col.field, indexcount, col.primarykey, col.unique)
+            sql.writeIndexScript(table.schema, table.name, table.tablespace, col.field, table.tableNumber, indexcount, col.primarykey, col.unique)
             indexcount += 1
         
         # If column needs a sequence, generate scripts 
@@ -278,7 +278,7 @@ def processTable(table: Table):
         # Only need to check for FK Table because field is implied due to column loading logic
         if col.fksourcetable != None:
             logger.debug(f'{table.name}.{col.field} has a foreign key relation to {col.fksourcetable}.{col.fksourcefield}')
-            sql.writeFKConstraintScript(table.schema, col.fksourcetable, col.fksourcefield, table.name, col.field, fkcount)
+            sql.writeFKConstraintScript(table.schema, col.fksourcetable, col.fksourcefield, table.name, col.field, table.tableNumber, fkcount)
             fkcount += 1
         
         # If column has a comment, add to comment queue to be written at end
@@ -312,6 +312,7 @@ def main():
     if cleandir: 
         # Read Schema CSV (grantFile = False default invoked)
         todo = csvRead(csvfile) 
+        tableCount = 1
         for row in todo:
             schematable = f'{row["schema"]}.{row["table"]}'
             logger.debug(f'Loading {schematable}.{row["field"]}')
@@ -327,7 +328,9 @@ def main():
                                             row["table"], 
                                             row["gen_audit_columns"], 
                                             row["gen_history_tables"], 
-                                            row["table_comment"])
+                                            row["table_comment"],
+                                            tableCount)
+                tableCount += 1
                 newcol = Column()
                 newcol.load(row)
                 tables[schematable].addColumn(newcol)

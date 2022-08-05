@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.03.0"
+__version__ = "22.08.05.0"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -37,6 +37,9 @@ class Table:
         List of Column objects associated with the table
     comment: str
         Table comment to include in database
+    tableNumber: int
+        Number of the table in the order of all tables to be processed
+        Used to prefix script files to run them in a particular order
     tablespace: str
         Tablespace for table. Derived from the schema name (drop '_OWNER' from common schema name)
     sourcetable: str
@@ -93,7 +96,7 @@ class Table:
         Returns a None-type object if Table should not have history
     """
 
-    def __init__(self, schema: str, tablename: str, genAudit: str, genHistory: str, comment: str, historyTable: bool = False, histSourceTableName: str = ''):
+    def __init__(self, schema: str, tablename: str, genAudit: str, genHistory: str, comment: str, tableNumber: int = 1, historyTable: bool = False, histSourceTableName: str = ''):
         """
         __init__(schema, tablename, genAudit, genHistory, comment, historyTable, historySourceTableName)
 
@@ -112,6 +115,9 @@ class Table:
                 Values: 'Y' == True, 'N' or '' == False
             comment: str
                 Database level table comment to be added
+            tableNumber: int
+                Number of the table in the order of all tables to be processed
+                Used to prefix script files to run them in a particular order
             historyTable: bool
                 Flag to show whether current table is, in fact, a history table
             historySourceTableName: str
@@ -122,6 +128,7 @@ class Table:
         self.name = tablename
         self.columns = []
         self.comment = comment
+        self.tableNumber = tableNumber
         self.tablespace = schema.upper().split('_OWNER')[0]
         self.sourcetable = histSourceTableName
         self.primarykeys = []
@@ -417,7 +424,7 @@ class Table:
         if self.needshistory:
             # Create new Table
             # Disable Audit and History, name table H_<sourcetablename>, add comment, set historyTable to True and set source name
-            histTable = Table(self.schema, f'H_{self.name}', 'N', 'N', f'History table for {self.name}', True, self.name)
+            histTable = Table(self.schema, f'H_{self.name}', 'N', 'N', f'History table for {self.name}', self.tableNumber, True, self.name)
 
             # Spawn 2 history columns (HIST_ID, CHANGE) and add to new table
             # Done first to position them at beginning of table
@@ -721,14 +728,15 @@ class Column:
             # Virtual columns preclude other options
             outString = f'AS ({self.virtualexpr}) VIRTUAL'
         else:
-            # If notnull == True, add 'NOT NULL' to options string
-            if self.notnull:
-                outString = 'NOT NULL '
             # If default has a value, append 'DEFAULT <value>'
             if self.default != None:
-                outString = f'{outString}DEFAULT {self.default}'
+                outString = f'DEFAULT {self.default}'
+            # If notnull == True, add 'NOT NULL' to options string
+            if self.notnull:
+                outString = f'{outString}    NOT NULL'
+            
         # Return compiled string
-        return outString
+        return outString.strip()
     
 
     def getLobOptions(self) -> dict:

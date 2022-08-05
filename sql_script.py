@@ -3,7 +3,7 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.07.24.0"
+__version__ = "22.08.05.0"
 
 import os
 import logging 
@@ -168,8 +168,9 @@ def lobAsSecureFile(column: str, tablespace: str, loboptions: dict) -> str:
     return to_save
 
 
-def writeIndexScript(schema: str, tablename: str, tablespace: str, field: str, count: int = 1, 
-                    primaryKey: bool = True, unique: bool = True, outdirectory: str = outputDir):
+def writeIndexScript(schema: str, tablename: str, tablespace: str, field: str, tableCount: int = 1,
+                    count: int = 1, primaryKey: bool = True, unique: bool = True, 
+                    outdirectory: str = outputDir):
     """
     writeIndexScript(schema, tablename, tablespace, field, count, primaryKey, unique, outDirectory)
 
@@ -184,6 +185,9 @@ def writeIndexScript(schema: str, tablename: str, tablespace: str, field: str, c
             Tablespace to apply to script
         field: str
             Name of field to be indexed
+        tableCount: int
+            Order of table in the list of tables to be processed
+            Used for determining order to run output scripts in
         count: int
             Number of indexes generated for a given table. Used to append number to make name unique
         primaryKey: bool
@@ -225,22 +229,23 @@ def writeIndexScript(schema: str, tablename: str, tablespace: str, field: str, c
                 '/\n\n'
 
     # Write script to file in output/INDEXES. Will create directory if missing
-    logger.info(f'Writing {tablename}_{key_type}{number} to file')
+    logger.info(f'Writing {tableCount:03}_{tablename}_{key_type}{number} to file')
     directory = f'{outdirectory}\\INDEXES\\'
     os.makedirs(directory, exist_ok = True)
-    with open(f'{directory}{tablename}_{key_type}{number}.sql', 'w') as f:
+    with open(f'{directory}{tableCount:03}_{tablename}_{key_type}{number}.sql', 'w') as f:
         f.write(toWrite)
     
     # If a Primary Key index, generate corresponding constraint script
     if primaryKey:
-        writePKConstraintScript(schema, tablename, f'{tablename}_{key_type}{number}', field, outdirectory)
+        writePKConstraintScript(schema, tablename, f'{tablename}_{key_type}{number}', field, tableCount, outdirectory)
     
     # If not a Primary Key index but still needs to enforce uniqueness, generate corresponding constraint script
     elif unique:
-        writeUniqueConstraintScript(schema, tablename, field, outdirectory)
+        writeUniqueConstraintScript(schema, tablename, f'{tablename}_{key_type}{number}', field, tableCount, outdirectory)
 
 
-def writePKConstraintScript(schema: str, tablename: str, index: str, field: str, outdirectory: str = outputDir):
+def writePKConstraintScript(schema: str, tablename: str, index: str, field: str, tableCount: int = 1, 
+                            outdirectory: str = outputDir):
     """
     writePKConstraintScript(schema, tablename, index, field, outDirectory)
 
@@ -255,6 +260,9 @@ def writePKConstraintScript(schema: str, tablename: str, index: str, field: str,
             Name of the index. Will be used as CONSTRAINT name as well
         field: str
             Name of field to be constrained
+        tableCount: int
+            Order of table in the list of tables to be processed
+            Used for determining order to run output scripts in
         outDirectory: str
             Output directory. Defaults to value from config file
     """
@@ -272,14 +280,15 @@ def writePKConstraintScript(schema: str, tablename: str, index: str, field: str,
                 '/\n\n'
 
     # Write script to file in output/CONSTRAINTS. Will create directory if missing
-    logger.info(f'Writing {index} to file')
+    logger.info(f'Writing {tableCount:03}_{index} to file')
     directory = f'{outdirectory}\\CONSTRAINTS\\'
     os.makedirs(directory, exist_ok = True)
-    with open(f'{directory}{index}.sql', 'w') as f:
+    with open(f'{directory}{tableCount:03}_{index}.sql', 'w') as f:
         f.write(toWrite)
 
 
-def writeUniqueConstraintScript(schema: str, tablename: str, field: str, outdirectory: str = outputDir):
+def writeUniqueConstraintScript(schema: str, tablename: str, index: str, field: str, tableCount: int = 1,
+                                outdirectory: str = outputDir):
     """
     writeUniqueConstraintScript(schema, tablename, field, outDirectory)
 
@@ -290,8 +299,13 @@ def writeUniqueConstraintScript(schema: str, tablename: str, field: str, outdire
             Database schema the table will reside in
         tablename: str
             Name of the table to be have constraint applied
+        index: str
+            Name of the index. Will be used as CONSTRAINT name as well
         field: str
             Name of field to be constrained
+        tableCount: int
+            Order of table in the list of tables to be processed
+            Used for determining order to run output scripts in
         outDirectory: str
             Output directory. Defaults to value from config file
     """
@@ -299,24 +313,25 @@ def writeUniqueConstraintScript(schema: str, tablename: str, field: str, outdire
     logger.info(f'Prepping {tablename}.{field} unique Constraint script')
 
     # Populate CONSTRAINT script template
-    toWrite = f'prompt --Adding {tablename}_{field}_UI unique constraint\n\n' \
+    toWrite = f'prompt --Adding {index} unique constraint\n\n' \
                 f'ALTER TABLE {schema}.{tablename} ADD (\n' \
-                f'{tab}CONSTRAINT {tablename}_{field}_UI\n' \
+                f'{tab}CONSTRAINT {index}\n' \
                 f'{tab}UNIQUE\n' \
                 f'{tab}({field})\n' \
                 ');\n' \
                 '/\n\n'
 
     # Write script to file in output/CONSTRAINTS. Will create directory if missing
-    logger.info(f'Writing {tablename}_{field}_UI to file')
+    logger.info(f'Writing {tableCount:03}_{index} to file')
     directory = f'{outdirectory}\\CONSTRAINTS\\'
     os.makedirs(directory, exist_ok = True)
-    with open(f'{directory}{tablename}_{field}_UI.sql', 'w') as f:
+    with open(f'{directory}{tableCount:03}_{index}.sql', 'w') as f:
         f.write(toWrite)
 
 
-def writeCompoundIndexScript(schema: str, tablename: str, tablespace: str, fields: list, count: int = 1, 
-                            primaryKey: bool = True, unique: bool = True, outdirectory: str = outputDir):
+def writeCompoundIndexScript(schema: str, tablename: str, tablespace: str, fields: list, tableCount: int = 1, 
+                            count: int = 1, primaryKey: bool = True, unique: bool = True, 
+                            outdirectory: str = outputDir):
     """
     writeCompoundIndexScript(schema, tablename, tablespace, fields, count, primaryKey, unique, outDirectory)
 
@@ -331,6 +346,9 @@ def writeCompoundIndexScript(schema: str, tablename: str, tablespace: str, field
             Name of database tablespace to specify in script
         fields: list
             List of fields to be merged into compound index
+        tableCount: int
+            Order of table in the list of tables to be processed
+            Used for determining order to run output scripts in
         count: int
             Count of indexes on a given table to give number for uniqueness
         primaryKey: bool
@@ -377,22 +395,23 @@ def writeCompoundIndexScript(schema: str, tablename: str, tablespace: str, field
                 '/\n\n'
 
     # Write script to file in output/INDEXES. Will create directory if missing
-    logger.info(f'Writing {tablename}_COMPOUND_{key_type}{number} to file')
+    logger.info(f'Writing {tableCount:03}_{tablename}_COMPOUND_{key_type}{number} to file')
     directory = f'{outdirectory}\\INDEXES\\'
     os.makedirs(directory, exist_ok = True)
-    with open(f'{directory}{tablename}_COMPOUND_{key_type}{number}.sql', 'w') as f:
+    with open(f'{directory}{tableCount:03}_{tablename}_COMPOUND_{key_type}{number}.sql', 'w') as f:
         f.write(toWrite)
     
     # If a Primary Key index, generate corresponding constraint script
     if primaryKey:
-        writeCompoundPKConstraintScript(schema, tablename, f'{tablename}_COMPOUND_{key_type}{number}', fields, outdirectory)
+        writeCompoundPKConstraintScript(schema, tablename, f'{tablename}_COMPOUND_{key_type}{number}', fields, tableCount, outdirectory)
     
     # If not a Primary Key index but still needs to enforce uniqueness, generate corresponding constraint script
     elif unique:
-        writeUniqueCompoundConstraintScript(schema, tablename, f'{tablename}_COMPOUND_{key_type}{number}', fields, outdirectory)
+        writeUniqueCompoundConstraintScript(schema, tablename, f'{tablename}_COMPOUND_{key_type}{number}', fields, tableCount, outdirectory)
 
 
-def writeCompoundPKConstraintScript(schema: str, tablename: str, index: str, fields: list, outdirectory: str = outputDir):
+def writeCompoundPKConstraintScript(schema: str, tablename: str, index: str, fields: list, tableCount: int = 1, 
+                                    outdirectory: str = outputDir):
     """
     writeCompoundPKConstraintScript(schema, tablename, index, field, outDirectory)
 
@@ -407,6 +426,9 @@ def writeCompoundPKConstraintScript(schema: str, tablename: str, index: str, fie
             Name of the index. Will be used as CONSTRAINT name as well
         fields: list
             List of field names to include in compound constraint
+        tableCount: int
+            Order of table in the list of tables to be processed
+            Used for determining order to run output scripts in
         outDirectory: str
             Output directory. Defaults to value from config file
     """
@@ -429,14 +451,15 @@ def writeCompoundPKConstraintScript(schema: str, tablename: str, index: str, fie
                 '/\n\n'
 
     # Write script to file in output/CONSTRAINTS. Will create directory if missing
-    logger.info(f'Writing {index} to file')
+    logger.info(f'Writing {tableCount:03}_{index} to file')
     directory = f'{outdirectory}\\CONSTRAINTS\\'
     os.makedirs(directory, exist_ok = True)
-    with open(f'{directory}{index}.sql', 'w') as f:
+    with open(f'{directory}{tableCount:03}_{index}.sql', 'w') as f:
         f.write(toWrite)
 
 
-def writeUniqueCompoundConstraintScript(schema: str, tablename: str, index: str, fields: list, outdirectory: str = outputDir):
+def writeUniqueCompoundConstraintScript(schema: str, tablename: str, index: str, fields: list, tableCount: int = 1, 
+                                        outdirectory: str = outputDir):
     """
     writeUniqueCompoundConstraintScript(schema, tablename, index, fields, outDirectory)
 
@@ -451,6 +474,9 @@ def writeUniqueCompoundConstraintScript(schema: str, tablename: str, index: str,
             Name of the index. Will be used as CONSTRAINT name as well
         fields: list
             List of field names to be included in compound constraint
+        tableCount: int
+            Order of table in the list of tables to be processed
+            Used for determining order to run output scripts in
         outDirectory: str
             Output directory. Defaults to value from config file
     """
@@ -471,15 +497,15 @@ def writeUniqueCompoundConstraintScript(schema: str, tablename: str, index: str,
                 '/\n\n'
 
     # Write script to file in output/CONSTRAINTS. Will create directory if missing
-    logger.info(f'Writing {index} to file')
+    logger.info(f'Writing {tableCount:03}_{index} to file')
     directory = f'{outdirectory}\\CONSTRAINTS\\'
     os.makedirs(directory, exist_ok = True)
-    with open(f'{directory}{index}.sql', 'w') as f:
+    with open(f'{directory}{tableCount:03}_{index}.sql', 'w') as f:
         f.write(toWrite)
 
 
 def writeFKConstraintScript(schema: str, sourcetable: str, sourcefield: str, boundtable: str, boundfield: str, 
-                            count: int = 1, outdirectory: str = outputDir):
+                            tableCount: int = 1, count: int = 1, outdirectory: str = outputDir):
     """
     writeFKConstraintScript(schema, sourcetable, sourcefield, boundtable, boundfield, count, outDirectory)
 
@@ -496,6 +522,9 @@ def writeFKConstraintScript(schema: str, sourcetable: str, sourcefield: str, bou
             Table name for table with the constraint applied
         boundfield: str
             Field name for field with the constraint applied
+        tableCount: int
+            Order of table in the list of tables to be processed
+            Used for determining order to run output scripts in
         count: int
             Number of FKs on table so far. Used to make FK name unique
         outDirectory: str
@@ -519,10 +548,10 @@ def writeFKConstraintScript(schema: str, sourcetable: str, sourcefield: str, bou
                 '/\n\n'
 
     # Write script to file in output/CONSTRAINTS. Will create directory if missing
-    logger.info(f'Writing {boundtable}_{boundfield}_FK{number} to file')
+    logger.info(f'Writing {tableCount:03}_{boundtable}_{boundfield}_FK{number} to file')
     directory = f'{outdirectory}\\CONSTRAINTS\\'
     os.makedirs(directory, exist_ok = True)
-    with open(f'{directory}{boundtable}_{boundfield}_FK{number}.sql', 'w') as f:
+    with open(f'{directory}{tableCount:03}_{boundtable}_{boundfield}_FK{number}.sql', 'w') as f:
         f.write(toWrite)
 
 

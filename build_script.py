@@ -3,7 +3,7 @@
 """build_script.py: Module for build script generation"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.07.22.0"
+__version__ = "22.08.05.0"
 
 
 import os
@@ -22,11 +22,11 @@ write_order = [
                 'INDEXES',
                 'CONSTRAINTS',
                 'REF_CONSTRAINTS',
-                'TRIGGERS',
                 'FUNCTIONS',
                 'PACKAGES',
                 'PACKAGE_BODIES',
                 'PROCEDURES',
+                'TRIGGERS',
                 'VIEWS',
                 'COMMENTS',
                 'GRANTS', 
