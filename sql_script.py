@@ -3,7 +3,7 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.05.1"
+__version__ = "22.08.08.0"
 
 import os
 import logging 
@@ -280,10 +280,10 @@ def writePKConstraintScript(schema: str, tablename: str, index: str, field: str,
                 '/\n\n'
 
     # Write script to file in output/CONSTRAINTS. Will create directory if missing
-    logger.info(f'Writing {tableCount:03}_{index} to file')
+    logger.info(f'Writing {tableCount:03}_1_{index} to file')
     directory = f'{outdirectory}\\CONSTRAINTS\\'
     os.makedirs(directory, exist_ok = True)
-    with open(f'{directory}{tableCount:03}_{index}.sql', 'w') as f:
+    with open(f'{directory}{tableCount:03}_1_{index}.sql', 'w') as f:
         f.write(toWrite)
 
 
@@ -322,10 +322,10 @@ def writeUniqueConstraintScript(schema: str, tablename: str, index: str, field: 
                 '/\n\n'
 
     # Write script to file in output/CONSTRAINTS. Will create directory if missing
-    logger.info(f'Writing {tableCount:03}_{index} to file')
+    logger.info(f'Writing {tableCount:03}_2_{index} to file')
     directory = f'{outdirectory}\\CONSTRAINTS\\'
     os.makedirs(directory, exist_ok = True)
-    with open(f'{directory}{tableCount:03}_{index}.sql', 'w') as f:
+    with open(f'{directory}{tableCount:03}_2_{index}.sql', 'w') as f:
         f.write(toWrite)
 
 
@@ -451,10 +451,10 @@ def writeCompoundPKConstraintScript(schema: str, tablename: str, index: str, fie
                 '/\n\n'
 
     # Write script to file in output/CONSTRAINTS. Will create directory if missing
-    logger.info(f'Writing {tableCount:03}_{index} to file')
+    logger.info(f'Writing {tableCount:03}_1_{index} to file')
     directory = f'{outdirectory}\\CONSTRAINTS\\'
     os.makedirs(directory, exist_ok = True)
-    with open(f'{directory}{tableCount:03}_{index}.sql', 'w') as f:
+    with open(f'{directory}{tableCount:03}_1_{index}.sql', 'w') as f:
         f.write(toWrite)
 
 
@@ -497,10 +497,10 @@ def writeUniqueCompoundConstraintScript(schema: str, tablename: str, index: str,
                 '/\n\n'
 
     # Write script to file in output/CONSTRAINTS. Will create directory if missing
-    logger.info(f'Writing {tableCount:03}_{index} to file')
+    logger.info(f'Writing {tableCount:03}_2_{index} to file')
     directory = f'{outdirectory}\\CONSTRAINTS\\'
     os.makedirs(directory, exist_ok = True)
-    with open(f'{directory}{tableCount:03}_{index}.sql', 'w') as f:
+    with open(f'{directory}{tableCount:03}_2_{index}.sql', 'w') as f:
         f.write(toWrite)
 
 
@@ -548,10 +548,10 @@ def writeFKConstraintScript(schema: str, sourcetable: str, sourcefield: str, bou
                 '/\n\n'
 
     # Write script to file in output/CONSTRAINTS. Will create directory if missing
-    logger.info(f'Writing {tableCount:03}_{boundtable}_{boundfield}_FK{number} to file')
+    logger.info(f'Writing {tableCount:03}_3_{boundtable}_{boundfield}_FK{number} to file')
     directory = f'{outdirectory}\\CONSTRAINTS\\'
     os.makedirs(directory, exist_ok = True)
-    with open(f'{directory}{tableCount:03}_{boundtable}_{boundfield}_FK{number}.sql', 'w') as f:
+    with open(f'{directory}{tableCount:03}_3_{boundtable}_{boundfield}_FK{number}.sql', 'w') as f:
         f.write(toWrite)
 
 
@@ -856,6 +856,7 @@ def saveHistoryProcedure(schema: str, tablename: str, columns: list) -> str:
                     f'{tab}(\n' \
                     f'{formatted_params}' \
                     f'{tab}) IS\n' \
+                    f'{tab}{tab}message_out VARCHAR2(4000);\n' \
                     f'{tab}BEGIN\n' \
                     f'{tab}INSERT INTO {schema}.H_{tablename} (\n'\
                     f'{formatted_columns}\n' \
@@ -912,7 +913,7 @@ def writeHistoryPackage(outdirectory: str = outputDir):
 
             # Append ending to PACKAGE script
             to_write = f'{to_write}END {app_account}_HISTORY;\n/\n\n' \
-                        f'GRANT EXECUTE ON {schema}.{app_account}_HISTORY TO {app_account}\n\n' \
+                        f'GRANT EXECUTE ON {schema}.{app_account}_HISTORY TO {app_account};\n/\n\n' \
                         f'show errors package {schema}.{app_account}_HISTORY'
             
             # Write script to file in output/PACKAGES. Will create directory if missing
