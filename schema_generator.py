@@ -3,15 +3,17 @@
 """schema_generator.py: Main module to parse csv and generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.05.0"
+__version__ = "22.08.09.0"
 
 import logging
 import os
 import csv
 import time
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from config import Config
 
+threads = os.cpu_count() ^ 2
 logger = logging
 config = Config().config
 # Update changes to CSV file in default_schema_row AND schema_headers
@@ -90,6 +92,7 @@ doClean = config['clean-script']['setting']
 
 # Dictionary to hold tables to process
 tables = {}
+tableCount: int
 
 
 def convertToDict(csvrow: tuple, grantFile: bool) -> dict:
@@ -194,6 +197,13 @@ def csvRead(filename: str, grantFile: bool = False) -> list:
     return todo
 
 
+def generateHistoryTables(table: Table, tableNum: int):
+    schematable = f'{table.schema}.H_{table.name}'
+    histTable = table.genHistoryTable(tableNum)
+    if histTable is not None:
+        tables[schematable] = histTable
+
+
 def processTable(table: Table):
     """
     processTable(table)
@@ -207,9 +217,6 @@ def processTable(table: Table):
     """
 
     logger.info(f'Processing table {table.schema}.{table.name}...')
-    # Reset index and foreign key count
-    indexcount = 1
-    fkcount = 1
     
     # Process compound indexes and remove any invalid entries
     table.cleanCompoundIndex()
@@ -217,12 +224,7 @@ def processTable(table: Table):
     # If Gen History Table is True, create history table object and process for scripts
     if table.needshistory:
         logger.info('History Table and Structure requested.')
-        histTable = table.genHistoryTable()
-        # If history table is not None, process
-        if histTable != None:
-            processTable(histTable)
-            sql.writeHistoryTriggers(table.schema, table.name, table.genColumnList())
-            logger.info(f'Resuming processing table {table.schema}.{table.name}...')
+        sql.writeHistoryTriggers(table.schema, table.name, table.genColumnList())
     
     # If Gen Audit Columns is True, inject audit columns into table
     if table.needsaudit:
@@ -244,47 +246,77 @@ def processTable(table: Table):
         logger.debug(f'Table {table.name} has one or more compound indexes')
         indexFields = table.getIndexFields()
         for key in indexFields.keys():
-            sql.writeCompoundIndexScript(table.schema, table.name, table.tablespace, indexFields[key], table.tableNumber, indexcount, primaryKey = False, unique = table.isCompoundIndexUnique(key))
-            indexcount += 1
+            sql.writeCompoundIndexScript(table.schema, table.name, table.tablespace, indexFields[key], table.tableNumber, table.indexcount, primaryKey = False, unique = table.isCompoundIndexUnique(key))
+            table.indexcount += 1
 
     # Write table script to file
     sql.writeTableScript(table.schema, table.name, table.genColumnList(), table.tablespace)
 
-    # Process all columns individually
+    # Process all columns individually (cannot be multi-threaded due to shared index and FK counts per table)
     for col in table.columns:
-        logger.debug(f'Writing scripts for {table.name}.{col.field}')
-        # If table does not have compound PK and column is marked as PK, generate scripts for PK
-        if col.primarykey and not table.hasCompoundPK():
-            logger.debug(f'{table.name}.{col.field} is Primary Key')
-            sql.writeIndexScript(table.schema, table.name, table.tablespace, col.field, table.tableNumber, primaryKey = col.primarykey)
-        # If not PK, but marked as indexed, check if in compound index then process if not
-        elif col.indexed and not table.isFieldInCompoundIndex(col.field):
-            logger.debug(f'{table.name}.{col.field} is Indexed and unique = {col.unique}')
-            sql.writeIndexScript(table.schema, table.name, table.tablespace, col.field, table.tableNumber, indexcount, col.primarykey, col.unique)
-            indexcount += 1
-        
+        processColumn(table, col)
+
+
+def processColumn(table: Table, column: Column):
+    """
+    processColumn(table, column)
+
+    Processes a given column and generates all the scripts for that column. 
+
+    Parameters:
+        table: Table
+            Table object to be processed
+        column: Column
+            Column object to be processed
+    """
+
+    logger.debug(f'Writing scripts for {table.name}.{column.field}')
+    # If table does not have compound PK and column is marked as PK, generate scripts for PK
+    if column.primarykey and not table.hasCompoundPK():
+        logger.debug(f'{table.name}.{column.field} is Primary Key')
+        sql.writeIndexScript(table.schema, table.name, table.tablespace, column.field, table.tableNumber, primaryKey = column.primarykey)
+    # If not PK, but marked as indexed, check if in compound index then process if not
+    elif column.indexed and not table.isFieldInCompoundIndex(column.field):
+        logger.debug(f'{table.name}.{column.field} is Indexed and unique = {column.unique}')
+        sql.writeIndexScript(table.schema, table.name, table.tablespace, column.field, table.tableNumber, table.indexcount, column.primarykey, column.unique)
+        table.indexcount += 1
+    
+    # If column needs a sequence, generate scripts 
         # If column needs a sequence, generate scripts 
-        # Flag for if sequence needs to be populated by trigger and generate that script as well
-        if col.sequenced:
-            if col.sequencetouse == None:
-                logger.debug(f'{table.name}.{col.field} has an assigned Sequence. Trigger-fired = {col.triggered}')
-                sql.writeSequenceScript(table.schema, table.name, col.field, col.sequencestart, col.triggered)
-            # If reusing sequence, nothing to do unless trigger population is requested
-            elif col.triggered:
-                logger.debug(f'{table.name}.{col.field} is re-using sequence {col.sequencetouse}. Trigger-fired = {col.triggered}')
-                sql.writeTriggerScript(table.schema, table.name, col.field, col.sequencetouse)
-        
-        # If column has a foreign key source table defined, generate FK scripts
-        # Only need to check for FK Table because field is implied due to column loading logic
-        if col.fksourcetable != None:
-            logger.debug(f'{table.name}.{col.field} has a foreign key relation to {col.fksourcetable}.{col.fksourcefield}')
-            sql.writeFKConstraintScript(table.schema, col.fksourcetable, col.fksourcefield, table.name, col.field, table.tableNumber, fkcount)
-            fkcount += 1
-        
-        # If column has a comment, add to comment queue to be written at end
-        if col.comment != None:
-            logger.debug(f'{table.name}.{col.field} has a comment')
-            sql.addColumnComment(table.schema, table.name, col.field, col.comment)
+    # If column needs a sequence, generate scripts 
+    # Flag for if sequence needs to be populated by trigger and generate that script as well
+    if column.sequenced:
+        if column.sequencetouse == None:
+            logger.debug(f'{table.name}.{column.field} has an assigned Sequence. Trigger-fired = {column.triggered}')
+            sql.writeSequenceScript(table.schema, table.name, column.field, column.sequencestart, column.triggered)
+        # If reusing sequence, nothing to do unless trigger population is requested
+        elif column.triggered:
+            logger.debug(f'{table.name}.{column.field} is re-using sequence {column.sequencetouse}. Trigger-fired = {column.triggered}')
+            sql.writeTriggerScript(table.schema, table.name, column.field, column.sequencetouse)
+    
+    # If column has a foreign key source table defined, generate FK scripts
+    # Only need to check for FK Table because field is implied due to column loading logic
+    if column.fksourcetable != None:
+        logger.debug(f'{table.name}.{column.field} has a foreign key relation to {column.fksourcetable}.{column.fksourcefield}')
+        sql.writeFKConstraintScript(table.schema, column.fksourcetable, column.fksourcefield, table.name, column.field, table.tableNumber, table.fkcount)
+        table.fkcount += 1
+    
+    # If column has a comment, add to comment queue to be written at end
+    if column.comment != None:
+        logger.debug(f'{table.name}.{column.field} has a comment')
+        sql.addColumnComment(table.schema, table.name, column.field, column.comment)
+
+
+def addGrant(grant):
+    level = 'S'
+    if grant["insert"].upper() == 'X':
+        level = f'{level}I'
+    if grant["update"].upper() == 'X':
+        level = f'{level}U'
+    if grant["delete"].upper() == 'X':
+        level = f'{level}D'
+    logger.debug(f'Adding GRANT of {level} to {grant["user"]} on {grant["schema"]}.{grant["table"]}')
+    sql.addGrant(grant["schema"], grant["table"], grant["user"], level)
 
 
 def main():
@@ -335,9 +367,14 @@ def main():
                 newcol.load(row)
                 tables[schematable].addColumn(newcol)
         logger.info('All tables and fields loaded')
+        holdTables = tables.copy()
+        # Extract and create History Tables
+        for key in holdTables.keys():
+            generateHistoryTables(holdTables[key], tableCount)
+            tableCount += 1
         # Process each table and generate scripts
-        for key in tables.keys():
-            processTable(tables[key])
+        with ThreadPoolExecutor(threads) as pool:
+            pool.map(processTable, (tables[key] for key in tables.keys()))
 
         # If 'use-procedure' setting is on, complete history package and write to file
         if history_package:
@@ -350,16 +387,8 @@ def main():
 
         # Read Grants CSV and process contents
         todoGrants = csvRead(grantsFile, True)
-        for grant in todoGrants:
-            level = 'S'
-            if grant["insert"].upper() == 'X':
-                level = f'{level}I'
-            if grant["update"].upper() == 'X':
-                level = f'{level}U'
-            if grant["delete"].upper() == 'X':
-                level = f'{level}D'
-            logger.debug(f'Adding GRANT of {level} to {grant["user"]} on {grant["schema"]}.{grant["table"]}')
-            sql.addGrant(grant["schema"], grant["table"], grant["user"], level)
+        with ThreadPoolExecutor(threads) as pool:
+            pool.map(addGrant, todoGrants)
         logger.info('Saving Grants for all tables')
         sql.writeGrants()
 

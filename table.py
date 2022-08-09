@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.05.0"
+__version__ = "22.08.09.0"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -62,6 +62,10 @@ class Table:
         NOTE: Should be run before audit column injection to exclude audit columns from history
     ishistory: bool
         Flag for if table is a history table
+    indexcount: int
+        Count of indexes on the table. Incremented to generate unique scripts
+    fkcount: int
+        Count of FKs on the table. Incremented to generate unique scripts
     
     Methods:
     -----------
@@ -138,6 +142,8 @@ class Table:
         self.needsaudit = False
         self.needshistory = False
         self.ishistory = historyTable
+        self.indexcount = 1
+        self.fkcount = 1
 
         if genAudit.upper() == 'Y':
             self.needsaudit = True
@@ -409,7 +415,7 @@ class Table:
             self.addColumn(cols[1])
 
 
-    def genHistoryTable(self) -> Table:
+    def genHistoryTable(self, tableNum: int = None) -> Table:
         """
         genHistoryTable()
 
@@ -422,9 +428,11 @@ class Table:
 
         # Confirm history table is expected for this table
         if self.needshistory:
+            if tableNum is None:
+                tableNum = self.tableNumber
             # Create new Table
             # Disable Audit and History, name table H_<sourcetablename>, add comment, set historyTable to True and set source name
-            histTable = Table(self.schema, f'H_{self.name}', 'N', 'N', f'History table for {self.name}', self.tableNumber, True, self.name)
+            histTable = Table(self.schema, f'H_{self.name}', 'N', 'N', f'History table for {self.name}', tableNum, True, self.name)
 
             # Spawn 2 history columns (HIST_ID, CHANGE) and add to new table
             # Done first to position them at beginning of table

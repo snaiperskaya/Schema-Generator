@@ -3,7 +3,7 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.08.2"
+__version__ = "22.08.09.0"
 
 import os
 import logging 
@@ -549,7 +549,7 @@ def writeFKConstraintScript(schema: str, sourcetable: str, sourcefield: str, bou
 
     # Write script to file in output/CONSTRAINTS. Will create directory if missing
     logger.info(f'Writing {tableCount:03}_3_{boundtable}_{boundfield}_FK{number} to file')
-    directory = f'{outdirectory}\\CONSTRAINTS\\'
+    directory = f'{outdirectory}\\REF_CONSTRAINTS\\'
     os.makedirs(directory, exist_ok = True)
     with open(f'{directory}{tableCount:03}_3_{boundtable}_{boundfield}_FK{number}.sql', 'w') as f:
         f.write(toWrite)
@@ -859,7 +859,6 @@ def saveHistoryProcedure(schema: str, tablename: str, columns: list) -> str:
                     f'{tab}) VALUES (\n' \
                     f'{formatted_values}\n'\
                     f'{tab});\n' \
-                    f'{tab}COMMIT;\n' \
                     f'{tab}EXCEPTION\n' \
                     f'{tab}{tab}WHEN OTHERS THEN\n' \
                     f'{log_error}\n' \
