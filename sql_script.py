@@ -3,7 +3,7 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.09.0"
+__version__ = "22.08.10.0"
 
 import os
 import logging 
@@ -727,7 +727,7 @@ def writeHistoryTriggers(schema: str, tablename: str, columns: list, outdirector
             logger.info(f'Writing {tablename}_H_{key[0:3]}_TRG to file')
             toWrite = f'prompt --Adding {tablename}_H_{key[0:3]}_TRG Trigger for automated history\n\n' \
                     f'CREATE OR REPLACE EDITIONABLE TRIGGER {schema}.{tablename}_H_{key[0:3]}_TRG\n' \
-                    f'BEFORE {key}\n' \
+                    f'AFTER {key}\n' \
                     f'ON {schema}.{tablename}\n' \
                     'REFERENCING NEW AS NEW OLD AS OLD\n' \
                     'FOR EACH ROW\n' \
