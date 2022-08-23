@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.09.0"
+__version__ = "22.08.23.0"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -168,7 +168,7 @@ class Table:
             self.primarykeys.append(col)
 
         # Check if it has an indexvalue, which would signify a compound index
-        if col.indexed and len(col.indexvalue) > 0:
+        if len(col.indexvalue) > 0:
             for index in col.indexvalue:
 
                 # If index in compindex, add Column to existing list
@@ -210,6 +210,8 @@ class Table:
             col.triggered = False
             col.fksourcetable = None
             col.fksourcefield = None
+            col.virtual = False
+            col.virtualexpr = None
 
             # Add Column to Table object
             self.addColumn(col)
@@ -390,7 +392,8 @@ class Table:
         if self.compindex:
             try:
                 if key in self.compindex.keys():
-                    return self.compindex[key][0].unique
+                    if key[0] == 'U':
+                        return True
             except:
                 logger.error('Something went wrong trying to determine if compound index is unique. Returning False')
                 return False
@@ -610,22 +613,18 @@ class Column:
                 self.default = f"'{self.default}'"                
 
         if csvrow["index"] != '':
-            # If direct match, no cluster provided and will process as individual index
-            if csvrow["index"].upper() in ['Y', 'U']:
-                self.indexed = True
-                # If value is U, mark as unique index 
-                if csvrow["index"].upper() == 'U':
-                    self.unique = True
-            # If first char is valid, try to process for cluster numbers for compound index
-            elif csvrow["index"][0].upper() in ['Y', 'U']:
+            for i in csvrow["index"].upper().split(','):
+                # If direct match, no cluster provided and will process as individual index
+                if i in ['Y', 'U']:
                     self.indexed = True
-                    # If value is U, mark as unique index
-                    if csvrow["index"][0].upper() == 'U':
+                    # If value is U, mark as unique index 
+                    if i == 'U':
                         self.unique = True
-                    for i in range(1, len(csvrow["index"])):
-                        # Cluster values must be numbers
-                        if csvrow["index"][i].isdigit():
-                            self.indexvalue.append(int(csvrow["index"][i]))
+                # If first char is valid, try to process for cluster numbers for compound index
+                elif i[0] in ['Y', 'U']:
+                    # Cluster values must be numbers
+                    if i[1:].isdigit():
+                        self.indexvalue.append(i)
 
         # If sequence field contains a number, mark as sequenced and save sequencestart
         if csvrow["sequence_start"].isdigit():

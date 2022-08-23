@@ -40,6 +40,7 @@ Currently generates the following scripts:
     - Binary fields are generally denoted as 'Y' or 'N' with blank typically equalling 'N'
         - 'Index' also accepts 'U' to denote a unique index
 		- 'Index' can also have a number after the letter to create groupings for compound indexes. For example, having multiple columns with 'U1' will combine those into a compound index and constraint
+        - 'Index' can also have both a compound, regular, or even multiple compound indexes defined. Each of these should be separated by commas (e.g. 'Y,U1,U3' would be a non-unique single index and participation in 2 unique compound indexes). NOTE: If both unique and non-unique singular indexes is defined, the output will be a single unique index.
 		- 'Primary key' also allows multiple columns to have 'Y' specified (no number) and all PK columns will be merged into a compound key
     - 'Units' only used on CHAR and VARCHAR2 fields and only if 'Size' is defined
         - 'Size' can be used without 'Units' for other fields such as NUMBERS

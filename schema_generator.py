@@ -3,7 +3,7 @@
 """schema_generator.py: Main module to parse csv and generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.09.0"
+__version__ = "22.08.23.0"
 
 import logging
 import os
@@ -239,14 +239,25 @@ def processTable(table: Table):
     # If table has multiple PKs defined, create compound key scripts
     if table.hasCompoundPK():
         logger.debug(f'Table {table.name} has a compound primary key')
-        sql.writeCompoundIndexScript(table.schema, table.name, table.tablespace, table.getPKFields(), table.tableNumber)
+        sql.writeCompoundIndexScript(table.schema, 
+                                    table.name, 
+                                    table.tablespace, 
+                                    table.getPKFields(), 
+                                    table.tableNumber)
     
     # If table has any compound indexes defined (after the cleanup), create scripts
     if table.hasCompoundIndex():
         logger.debug(f'Table {table.name} has one or more compound indexes')
         indexFields = table.getIndexFields()
         for key in indexFields.keys():
-            sql.writeCompoundIndexScript(table.schema, table.name, table.tablespace, indexFields[key], table.tableNumber, table.indexcount, primaryKey = False, unique = table.isCompoundIndexUnique(key))
+            sql.writeCompoundIndexScript(table.schema, 
+                                        table.name, 
+                                        table.tablespace, 
+                                        indexFields[key], 
+                                        table.tableNumber, 
+                                        table.indexcount, 
+                                        primaryKey = False, 
+                                        unique = table.isCompoundIndexUnique(key))
             table.indexcount += 1
 
     # Write table script to file
@@ -274,11 +285,22 @@ def processColumn(table: Table, column: Column):
     # If table does not have compound PK and column is marked as PK, generate scripts for PK
     if column.primarykey and not table.hasCompoundPK():
         logger.debug(f'{table.name}.{column.field} is Primary Key')
-        sql.writeIndexScript(table.schema, table.name, table.tablespace, column.field, table.tableNumber, primaryKey = column.primarykey)
+        sql.writeIndexScript(table.schema, 
+                            table.name, 
+                            table.tablespace, 
+                            column.field, 
+                            table.tableNumber, 
+                            primaryKey = column.primarykey)
     # If not PK, but marked as indexed, check if in compound index then process if not
-    elif column.indexed and not table.isFieldInCompoundIndex(column.field):
+    elif column.indexed: ### and not table.isFieldInCompoundIndex(column.field): ### Columns no longer marked as "indexed" unless it's an individual index
         logger.debug(f'{table.name}.{column.field} is Indexed and unique = {column.unique}')
-        sql.writeIndexScript(table.schema, table.name, table.tablespace, column.field, table.tableNumber, table.indexcount, column.primarykey, column.unique)
+        sql.writeIndexScript(table.schema, 
+                            table.name, 
+                            table.tablespace, 
+                            column.field, 
+                            table.tableNumber, 
+                            table.indexcount, 
+                            unique = column.unique)
         table.indexcount += 1
     
     # If column needs a sequence, generate scripts 
@@ -288,7 +310,11 @@ def processColumn(table: Table, column: Column):
     if column.sequenced:
         if column.sequencetouse == None:
             logger.debug(f'{table.name}.{column.field} has an assigned Sequence. Trigger-fired = {column.triggered}')
-            sql.writeSequenceScript(table.schema, table.name, column.field, column.sequencestart, column.triggered)
+            sql.writeSequenceScript(table.schema, 
+                                    table.name, 
+                                    column.field, 
+                                    column.sequencestart, 
+                                    column.triggered)
         # If reusing sequence, nothing to do unless trigger population is requested
         elif column.triggered:
             logger.debug(f'{table.name}.{column.field} is re-using sequence {column.sequencetouse}. Trigger-fired = {column.triggered}')
@@ -298,7 +324,13 @@ def processColumn(table: Table, column: Column):
     # Only need to check for FK Table because field is implied due to column loading logic
     if column.fksourcetable != None:
         logger.debug(f'{table.name}.{column.field} has a foreign key relation to {column.fksourcetable}.{column.fksourcefield}')
-        sql.writeFKConstraintScript(table.schema, column.fksourcetable, column.fksourcefield, table.name, column.field, table.tableNumber, table.fkcount)
+        sql.writeFKConstraintScript(table.schema, 
+                                    column.fksourcetable, 
+                                    column.fksourcefield, 
+                                    table.name, 
+                                    column.field, 
+                                    table.tableNumber, 
+                                    table.fkcount)
         table.fkcount += 1
     
     # If column has a comment, add to comment queue to be written at end
