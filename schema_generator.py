@@ -3,7 +3,7 @@
 """schema_generator.py: Main module to parse csv and generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.23.0"
+__version__ = "22.08.23.1"
 
 import logging
 import os
@@ -300,6 +300,7 @@ def processColumn(table: Table, column: Column):
                             column.field, 
                             table.tableNumber, 
                             table.indexcount, 
+                            primaryKey = False,
                             unique = column.unique)
         table.indexcount += 1
     
