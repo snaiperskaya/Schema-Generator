@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.23.0"
+__version__ = "22.08.26.0"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -440,8 +440,8 @@ class Table:
             # Spawn 2 history columns (HIST_ID, CHANGE) and add to new table
             # Done first to position them at beginning of table
             cols = spawnHistoryColumns(self.schema, self.name)
-            histTable.addColumn(cols[0])
-            histTable.addColumn(cols[1])
+            for col in cols:
+                histTable.addColumn(col)
 
             # Add rest of columns to history table
             histTable.addColumnsForHistory(self.columns)
@@ -870,4 +870,32 @@ def spawnHistoryColumns(schema: str, tablename: str) -> tuple:
     col2 = Column()
     col2.load(change)
 
-    return (col1, col2)
+    #Add CHANGE_DATE column
+    changedate = default_schema_row.copy()
+    changedate["schema"] = schema
+    changedate["table"] = tablename
+    changedate["field"] = 'CHANGE_DATE'
+    changedate["type"] = 'DATE'
+    changedate["not_null"] = 'Y'
+    changedate["default"] = 'SYSDATE'
+    changedate["column_comment"] = 'Time of change performed'
+
+    col3 = Column()
+    col3.load(changedate)
+
+    #Add CHANGE_USER column
+    changeuser = default_schema_row.copy()
+    changeuser["schema"] = schema
+    changeuser["table"] = tablename
+    changeuser["field"] = 'CHANGE_USER'
+    changeuser["type"] = 'VARCHAR2'
+    changeuser["size"] = '50'
+    changeuser["units"] = 'CHAR'
+    changeuser["not_null"] = 'Y'
+    changeuser["default"] = 'USER'
+    changeuser["column_comment"] = 'DB USER that performed change'
+
+    col4 = Column()
+    col4.load(changeuser)
+
+    return (col1, col2, col3, col4)
