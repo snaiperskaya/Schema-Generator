@@ -3,7 +3,7 @@
 """schema_generator.py: Main module to parse csv and generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.10.19.0"
+__version__ = "22.10.19.2"
 
 import logging
 import os
@@ -228,7 +228,7 @@ def processTable(table: Table):
     # If Gen History Table is True, create history table object and process for scripts
     if table.needshistory:
         logger.info('History Table and Structure requested.')
-        sql.writeHistoryTriggers(table.schema, table.name, table.genColumnList())
+        sql.writeHistoryTriggers(table.schema, table.name, table.genColumnListForHistory())
     
     # If Gen Audit Columns is True, inject audit columns into table
     if table.needsaudit:

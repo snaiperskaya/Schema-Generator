@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.10.19.1"
+__version__ = "22.10.19.2"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -77,6 +77,9 @@ class Table:
         and appends to the columns attribute of history Table
     genColumnList() -> list
         Generates a list of tuples with each holding core info for a given Column needed for script generation
+    genColumnListForHistory() -> list
+        Generates a list of tuples with each holding core info for a given Column needed for History script generation
+        NOTE: Done to exclude virtual and invisible columns from history tables
     hasCompoundPK() -> bool
         Returns True if length of primarykeys attribute greater than 1
     getPKFields() -> list
@@ -139,6 +142,7 @@ class Table:
         self.compindex = {}
         self.compindexfields = {}
         self.columnList = []
+        self.columnListHistory = []
         self.needsaudit = False
         self.needshistory = False
         self.ishistory = historyTable
@@ -239,6 +243,25 @@ class Table:
                 # Append tuple of (field, type-string, options-string, lob-options-dict)
                 self.columnList.append((col.field, col.getTypeString(), col.getOptionsString(), col.getLobOptions()))
         return self.columnList
+
+    
+    def genColumnListForHistory(self) -> list:
+        """
+        genColumnListForHistory()
+
+        Generates a list of Column details needed for history table script generation
+    
+        Returns:
+            list
+                List of tuples, each containing core Column details needed to generate history table scripts
+        """
+
+        self.columnListHistory = []
+        for col in self.columns:
+            if not (col.virtual or col.invisible): # Exclude virtual and invisible columns
+                # Append tuple of (field, type-string, options-string, lob-options-dict)
+                self.columnList.append((col.field, col.getTypeString(), col.getOptionsString(), col.getLobOptions()))
+        return self.columnListHistory
 
 
     def hasCompoundPK(self) -> bool:

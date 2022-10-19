@@ -3,7 +3,7 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.10.19.1"
+__version__ = "22.10.19.2"
 
 import os
 import logging 
@@ -757,13 +757,13 @@ def writeHistoryTriggers(schema: str, tablename: str, columns: list, outdirector
 
             # Compile columns into a string with formatting
             spacing = ' ' * (table_min_spacing - 4)
-            columnsFormatted = f'{tab}{tab}p_change_in =>{spacing}\'{key}\'\n'
+            columnsFormatted = f'{tab}{tab}p_in_change =>{spacing}\'{key}\'\n'
             for col in columns:
                 if len(col[0]) > table_min_spacing:
                     spacing = ' ' * 2
                 else:
                     spacing = ' ' * (table_min_spacing - len(col[0]))
-                columnsFormatted = f'{columnsFormatted}{tab}{tab}, p_{col[0].lower()}_in =>{spacing}:{triggerTypes[key]}.{col[0]}\n'
+                columnsFormatted = f'{columnsFormatted}{tab}{tab}, p_in_{col[0].lower()} =>{spacing}:{triggerTypes[key]}.{col[0]}\n'
             columnsFormatted = columnsFormatted.rstrip(',\n')
             logger.debug(columnsFormatted)
             
@@ -868,8 +868,8 @@ def saveHistoryProcedure(schema: str, tablename: str, columns: list) -> str:
     # Compile columns into strings for params, values, and columns for insert with formatting
     spacing = ' ' * (table_min_spacing - 4)
     formatted_columns = f'{tab}{tab}CHANGE'
-    formatted_params = f'{tab}{tab}p_change_in{spacing}IN{tab}{tab}VARCHAR2\n'
-    formatted_values = f'{tab}{tab}p_change_in'
+    formatted_params = f'{tab}{tab}p_in_change{spacing}IN{tab}{tab}VARCHAR2\n'
+    formatted_values = f'{tab}{tab}p_in_change'
     count_split = 1
     for col in columns:
         type = col[1].split('(')[0]
@@ -882,8 +882,8 @@ def saveHistoryProcedure(schema: str, tablename: str, columns: list) -> str:
             newline = f'\n{tab}{tab}'
             count_split += 1
         formatted_columns = f'{formatted_columns}{newline}, {col[0]}'
-        formatted_params = f'{formatted_params}{tab}{tab}, p_{col[0].lower()}_in{spacing}IN{tab}{tab}{type}\n'
-        formatted_values = f'{formatted_values}{newline}, p_{col[0].lower()}_in'
+        formatted_params = f'{formatted_params}{tab}{tab}, p_in_{col[0].lower()}{spacing}IN{tab}{tab}{type}\n'
+        formatted_values = f'{formatted_values}{newline}, p_in_{col[0].lower()}'
 
     # Populate HEADER template for PACKAGE
     to_save_header = f'{tab}PROCEDURE {proc_name}\n' \
