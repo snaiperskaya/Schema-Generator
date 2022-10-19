@@ -3,7 +3,7 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.10.0"
+__version__ = "22.10.19.0"
 
 import os
 import logging 
@@ -326,6 +326,50 @@ def writeUniqueConstraintScript(schema: str, tablename: str, index: str, field: 
     directory = f'{outdirectory}\\CONSTRAINTS\\'
     os.makedirs(directory, exist_ok = True)
     with open(f'{directory}{tableCount:03}_2_{index}.sql', 'w') as f:
+        f.write(toWrite)
+
+
+def writeSimpleCheckConstraintScript(schema: str, tablename: str, field: str, condition: str,
+                                tableCount: int = 1, outdirectory: str = outputDir):
+    """
+    writeCheckConstraintScript(schema, tablename, field, condition, tableCount, outDirectory)
+
+    Generates an ALTER TABLE script for table defined to add constraint and saves to output\CONSTRAINTS
+ 
+    Parameters:
+        schema: str
+            Database schema the table will reside in
+        tablename: str
+            Name of the table to be have constraint applied
+        field: str
+            Name of field to be constrained
+        condition: str
+            Condition for Check Constraint to be applied to field
+        tableCount: int
+            Order of table in the list of tables to be processed
+            Used for determining order to run output scripts in
+        outDirectory: str
+            Output directory. Defaults to value from config file
+    """
+
+    logger.info(f'Prepping {tablename}.{field} Check Constraint script')
+
+    clean_field = field.strip('_')
+
+    # Populate CONSTRAINT script template
+    toWrite = f'prompt --Adding {tablename}.{field} Check constraint\n\n' \
+                f'ALTER TABLE {schema}.{tablename} ADD (\n' \
+                f'{tab}CONSTRAINT {tablename}_CHECK_{clean_field}\n' \
+                f'{tab}CHECK\n' \
+                f'{tab}({field} {condition})\n' \
+                ');\n' \
+                '/\n\n'
+
+    # Write script to file in output/CONSTRAINTS. Will create directory if missing
+    logger.info(f'Writing {tableCount:03}_{tablename}_CHECK_{clean_field} to file')
+    directory = f'{outdirectory}\\CONSTRAINTS\\'
+    os.makedirs(directory, exist_ok = True)
+    with open(f'{directory}{tableCount:03}_{tablename}_CHECK_{clean_field}.sql', 'w') as f:
         f.write(toWrite)
 
 

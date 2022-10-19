@@ -3,7 +3,7 @@
 """schema_generator.py: Main module to parse csv and generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.23.1"
+__version__ = "22.10.19.0"
 
 import logging
 import os
@@ -31,8 +31,10 @@ default_schema_row = { # Order of columns in file
                 "index": '',
                 "sequence_start": '',
                 "pop_by_trigger": '',
+                "invisible": '',
                 "virtual": '',
                 "virtual_expr": '',
+                "check_constraint": '',
                 "lob_deduplication": '',
                 "lob_compression": '',
                 "lob_caching": '',
@@ -56,8 +58,10 @@ schema_headers = 'Schema,' \
                 'Index,' \
                 'Sequence Start,' \
                 'Pop by Trigger,' \
+                'Invisible,' \
                 'Virtual,' \
                 'Virtual Expression,' \
+                'Simple Check Constraint,' \
                 'LOB Deduplication,' \
                 '"LOB Compression (LOW, MEDIUM, HIGH)",' \
                 'LOB Caching,' \
@@ -333,6 +337,15 @@ def processColumn(table: Table, column: Column):
                                     table.tableNumber, 
                                     table.fkcount)
         table.fkcount += 1
+    
+    # If column has a simple Check Constraint defined, generate the script for this
+    if column.checkconstraint != None:
+        logger.debug(f'{table.name}.{column.field} has a simple Check Constraint defined as "{column.field} {column.checkconstraint}"')
+        sql.writeSimpleCheckConstraintScript(table.schema,
+                                            table.name,
+                                            column.field,
+                                            column.checkconstraint,
+                                            table.tableNumber)
     
     # If column has a comment, add to comment queue to be written at end
     if column.comment != None:

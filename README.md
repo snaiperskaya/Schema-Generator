@@ -8,11 +8,13 @@ Currently generates the following scripts:
 - Table (including columns, datatypes, options (not null, default, etc.))
     - LOB handling with options
 	- Virtual columns
+	- Invisible columns
 - Primary key (including index and constraint; compound keys)
 - Sequences (including custom start value, sequence recycling, and trigger population)
 - Additional Unique (with constraint) or Non-Unique Indexes
 - Compound Indexes
 - Foreign key constraints
+- Simple Check Constraints (value matching on a single field)
 - Standardized audit columns and trigger population (requires custom schema logging packages / synonyms be configured first)
 - History tables with trigger population 
     - Option to using procedures in triggers
@@ -48,6 +50,9 @@ Currently generates the following scripts:
 	- 'Virtual Expression' is only used if 'Virtual' = 'Y'
 		- This is the expression used to calculate a virtual column. Should be a valid SQL expression.
 		- WARNING: SQL Expression is not parsed for validity. Table script could fail to run if expression is not valid
+	- 'Simple Check Constraint' can be used to enforce a single or set of values for a single column
+		- Should be formatting as a condition. For example: " = 'Y'", " in (0,1)", or " <> 'Bananas'"
+		- WARNING: Condition is not validated. Invalid conditions could prevent table creation.
     - 'Sequence start' accepts:
         - An integer to denote the first value used in a new sequence 
         - A string that is the name of another sequence in the same schema (either existing or to be created)

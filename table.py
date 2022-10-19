@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.08.26.0"
+__version__ = "22.10.19.0"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -492,11 +492,17 @@ class Column:
         Existing (or created sequence) to reuse for this field (must be in same schema)
     triggered: bool
         Flag for whether sequence should be populated by a trigger on insert
+    invisible: bool
+        Flag for whether this is an invisible field. 
     virtual: bool
         Flag for whether this is a virtual field. 
         If True, virtualexpr should contain a string expression column should evaluate to
     virtualexpr: str
         String containing a (hopefully) valid SQL expression that the virtual column should resolve to
+    checkconstraint: str
+        String containing a condition for this column to be used in a simple Check Constraint
+        Examples include: " = 'Y'", " in (0,1)", " <> 'Tetris'" 
+        (space at the beginning helps prevent field being parsed as formula if CSV is opened in Excel)
     fksourcetable: str
         Source table name for Foreign Key generation
     fksourcefield: str
@@ -548,8 +554,10 @@ class Column:
         self.sequencestart = 1
         self.sequencetouse = None
         self.triggered = False
+        self.invisible = False
         self.virtual = False
         self.virtualexpr = None
+        self.checkconstraint = None
         self.fksourcetable = None
         self.fksourcefield = None
         self.comment = None
@@ -641,7 +649,11 @@ class Column:
             if csvrow["pop_by_trigger"].upper() == 'Y':
                 self.triggered = True
 
-        # If virtual if 'Y' and virtual expression is not empty, 
+        # If invisible is 'Y', mark as invisible
+        if csvrow['invisible'].upper() == 'Y':
+            self.invisible = True
+
+        # If virtual is 'Y' and virtual expression is not empty, 
         # Mark as virtual and save the expression in virtual expression
         # Only certain types allowed to be used as virtual to prevent issues
         if self.type in ['DATE', 'VARCHAR2', 'CHAR', 'NUMBER', 'TIMESTAMP'] \
@@ -649,6 +661,10 @@ class Column:
             and csvrow['virtual_expr'] != '':
             self.virtual = True
             self.virtualexpr = csvrow['virtual_expr']
+
+        # If check_constraint is not empty, record checkconstraint condition
+        if csvrow['check_constraint'] != '':
+            self.checkconstraint = csvrow['check_constraint'].strip()
 
         # If both FK fields are populated, save to fksource__ attributes
         if csvrow["fk_to_table"] != '' and csvrow["fk_to_field"] != '':
@@ -731,13 +747,16 @@ class Column:
         """
 
         outString = ''
+        if self.invisible:
+            # Invisible can be used with other options below
+            outString = f'INVISIBLE'
         if self.virtual:
             # Virtual columns preclude other options
-            outString = f'AS ({self.virtualexpr}) VIRTUAL'
+            outString = f'{outString}    AS ({self.virtualexpr}) VIRTUAL'
         else:
             # If default has a value, append 'DEFAULT <value>'
             if self.default != None:
-                outString = f'DEFAULT {self.default}'
+                outString = f'{outString}    DEFAULT {self.default}'
             # If notnull == True, add 'NOT NULL' to options string
             if self.notnull:
                 outString = f'{outString}    NOT NULL'
