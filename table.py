@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.10.19.0"
+__version__ = "22.10.19.1"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -195,26 +195,29 @@ class Table:
         """
 
         for column in cols:
-            # Create a copy of the column to avoid modifying original instance
-            col = column.duplicateColumn()
+            if not (column.virtual or column.invisible):
+                # Create a copy of the column to avoid modifying original instance
+                col = column.duplicateColumn()
 
-            # Remove constraints from history table columns to more freely allow records
-            col.notnull = False
-            col.primarykey = False
-            col.default = None
-            col.indexed = False
-            col.indexvalue = []
-            col.unique = False
-            col.sequenced = False
-            col.sequencestart = 1
-            col.triggered = False
-            col.fksourcetable = None
-            col.fksourcefield = None
-            col.virtual = False
-            col.virtualexpr = None
+                # Remove constraints from history table columns to more freely allow records
+                col.notnull = False
+                col.primarykey = False
+                col.default = None
+                col.indexed = False
+                col.indexvalue = []
+                col.unique = False
+                col.sequenced = False
+                col.sequencestart = 1
+                col.triggered = False
+                col.fksourcetable = None
+                col.fksourcefield = None
+                col.invisible = False
+                col.virtual = False
+                col.virtualexpr = None
+                col.checkconstraint = None
 
-            # Add Column to Table object
-            self.addColumn(col)
+                # Add Column to Table object
+                self.addColumn(col)
     
 
     def genColumnList(self) -> list:

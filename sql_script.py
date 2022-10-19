@@ -3,7 +3,7 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.10.19.0"
+__version__ = "22.10.19.1"
 
 import os
 import logging 
@@ -863,7 +863,7 @@ def saveHistoryProcedure(schema: str, tablename: str, columns: list) -> str:
 
     # If config option 'use-logging' is True, include additional lines for logging
     if use_sql_logging:
-        log_error = f'{log_error}{tab}{tab}{tab}SDW_LOGGER.LOGGING_UTL.LOG(message_out, \'{tablespace}_HISTORY.{proc_name}\');'
+        log_error = f'{log_error}{tab}{tab}{tab}{tablespace}_LOGGER.LOGGING_UTL.LOG(message_out, \'{tablespace}_HISTORY.{proc_name}\');'
     
     # Compile columns into strings for params, values, and columns for insert with formatting
     spacing = ' ' * (table_min_spacing - 4)
