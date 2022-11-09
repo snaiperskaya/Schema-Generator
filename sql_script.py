@@ -3,7 +3,7 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.10.19.2"
+__version__ = "22.11.09.0"
 
 import os
 import logging 
@@ -70,7 +70,7 @@ def writeTableScript(schema: str, tablename: str, columns: list, tablespace: str
             lobs.append(lobAsSecureFile(col[0], tablespace, col[3]))
 
         # If column name length is greater than table_min_spacing, apply 2 spaces as minimum
-        if len(col[0]) > table_min_spacing:
+        if len(col[0]) >= table_min_spacing:
             spacing = ' ' * 2
         # If column name length is shorter than table_min_spacing, 
         # apply spaces equal to table_min_spacing less the length of the name

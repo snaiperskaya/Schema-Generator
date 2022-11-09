@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.10.19.2"
+__version__ = "22.11.09.0"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -260,7 +260,7 @@ class Table:
         for col in self.columns:
             if not (col.virtual or col.invisible): # Exclude virtual and invisible columns
                 # Append tuple of (field, type-string, options-string, lob-options-dict)
-                self.columnList.append((col.field, col.getTypeString(), col.getOptionsString(), col.getLobOptions()))
+                self.columnListHistory.append((col.field, col.getTypeString(), col.getOptionsString(), col.getLobOptions()))
         return self.columnListHistory
 
 
