@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.11.09.0"
+__version__ = "23.01.19.0"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -101,11 +101,15 @@ class Table:
         Returns new Table that is mirrored from original table, with 2 new Columns added (HIST_ID, CHANGE)
         Creates new instances of all Column objects and updates their attributes to reduce contraints on history
         Returns a None-type object if Table should not have history
+    sortColumns()
+        Takes column list and sorts it, preserving overall order, but shifting all "NOT NULL" columns to the fore
+        This can result in a performance increase and/or decreased table size in Oracle
+        Regens column lists when done
     """
 
     def __init__(self, schema: str, tablename: str, genAudit: str, genHistory: str, comment: str, tableNumber: int = 1, historyTable: bool = False, histSourceTableName: str = ''):
         """
-        __init__(schema, tablename, genAudit, genHistory, comment, historyTable, historySourceTableName)
+        __init__(schema, tablename, genAudit, genHistory, comment, tableNumber, historyTable, historySourceTableName)
 
         Creates a new Table object
     
@@ -478,6 +482,37 @@ class Table:
         
         # Return Table (or None)
         return histTable
+
+    
+    def sortColumns(self):
+        """
+        sortColumns()
+
+        Takes column list and sorts it, preserving overall order, but shifting all "NOT NULL" columns to the fore
+        This can result in a performance increase and/or decreased table size in Oracle
+        Regens column lists when done
+        """
+
+        # Create temp lists to hold columns
+        nullableCols = []
+        allCols = []
+
+        # For all columns, sort by nullability
+        for col in self.columns:
+            if col.notnull:
+                allCols.append(col)
+            else:
+                nullableCols.append(col)
+        
+        # Add nullable columns to end of column list
+        for col in nullableCols:
+            allCols.append(col)
+        
+        # Update self.columns to new list
+        self.columns = allCols
+        # Regenerate column lists with updated ordering
+        self.genColumnList()
+        self.genColumnListForHistory()
 
 
 ##############################################

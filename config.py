@@ -3,7 +3,7 @@
 """config.py: Module for creating and loading .json config file"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.07.22.0"
+__version__ = "23.01.19.0"
 
 import json
 import os
@@ -26,11 +26,19 @@ class Config:
                     'desc': "Folder to write output scripts to. Default: '.\\output'",
                     'setting': '.\\output'
                 },
+                'schema-file-type': {
+                    'desc': "File-type used for schema outline ('xlsx' OR 'csv'). Default: 'csv'",
+                    'setting': 'csv'
+                },
                 'schema-file': {
+                    'desc': "File for generating Schema and Grants (XLSX). Schema and Grants will go on separate workbook pages. Default: '.\\Schema.xlsx'",
+                    'setting': '.\\Schema.xlsx'
+                },
+                'schema-file-csv': {
                     'desc': "File for generating schema (CSV). Default: '.\\Schema.csv'",
                     'setting': '.\\Schema.csv'
                 },
-                'grants-file': {
+                'grants-file-csv': {
                     'desc': "File for generating grants for a schema (CSV). Default: '.\\Grants.csv'",
                     'setting': '.\\Grants.csv'
                 },
@@ -50,6 +58,12 @@ class Config:
                 },
                 'use-logging': {
                     'desc': "Implement PL/SQL logging in triggers or procedures. Default: false",
+                    'setting': False
+                }
+            },
+            'sorting': {
+                'columns-nullable': {
+                    'desc': "If true, sort all 'NOT NULL' columns to the beginning of column list. Can improve performance in Oracle. Default: false",
                     'setting': False
                 }
             },

@@ -3,13 +3,15 @@
 """schema_generator.py: Main module to parse csv and generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.10.19.2"
+__version__ = "23.01.23.0"
 
 import logging
 import os
 import csv
 import time
 import shutil
+import openpyxl as xl
+from openpyxl.comments import Comment
 from concurrent.futures import ThreadPoolExecutor
 from config import Config
 
@@ -46,32 +48,88 @@ default_schema_row = { # Order of columns in file
                 "table_comment": '',
                 "column_comment": ''
                 }
-schema_headers = 'Schema,' \
-                'Table,' \
-                'Field,' \
-                'Type,' \
-                'Size,' \
-                'Units,' \
-                'Not Null,' \
-                'Primary Key,' \
-                'Default,' \
-                'Index,' \
-                'Sequence Start,' \
-                'Pop by Trigger,' \
-                'Invisible,' \
-                'Virtual,' \
-                'Virtual Expression,' \
-                'Simple Check Constraint,' \
-                'LOB Deduplication,' \
-                '"LOB Compression (LOW, MEDIUM, HIGH)",' \
-                'LOB Caching,' \
-                'LOB Logging,' \
-                'FK to Table,' \
-                'FK to Field,' \
-                'Gen Audit Columns,' \
-                'Gen History Table (Automated),' \
-                'Table Comment,' \
+default_grant_row = { #Order of columns in file
+                "schema": '',
+                "table": '',
+                "user": '',
+                "insert": '',
+                "update": '',
+                "delete": ''
+                }
+schema_headers = [
+                'Schema',
+                'Table',
+                'Field',
+                'Type',
+                'Size',
+                'Units',
+                'Not Null',
+                'Primary Key',
+                'Default',
+                'Index',
+                'Sequence Start',
+                'Pop by Trigger',
+                'Invisible',
+                'Virtual',
+                'Virtual Expression',
+                'Simple Check Constraint',
+                'LOB Deduplication',
+                '"LOB Compression (LOW, MEDIUM, HIGH)"',
+                'LOB Caching',
+                'LOB Logging',
+                'FK to Table',
+                'FK to Field',
+                'Gen Audit Columns',
+                'Gen History Table (Automated)',
+                'Table Comment',
                 'Column Comment'
+                ]
+
+grant_headers = [
+                'Schema',
+                'Table',
+                'User',
+                'Insert',
+                'Update',
+                'Delete'
+                ]
+
+schema_header_comments = {
+                        'Schema':'Schema Name to be used',
+                        'Table':'Table Name to be used',
+                        'Field':'Field/Column Name to be used',
+                        'Type':'Field type (e.g. VARCHAR2, NUMBER, DATE, etc.)',
+                        'Size':'Field size, if applicable',
+                        'Units':'Units for field size, if applicable (e.g. CHAR, BYTE)',
+                        'Not Null':'Should field be marked as Not Null? Y if yes, else no',
+                        'Primary Key':'Is this field the primary key of the table? Every table should have 1 primary key. If more than 1 is specified, a compound key is generated from all keys marked.',
+                        'Default':'Default value for the field if value not provided on INSERT',
+                        'Index':'Should field be indexed? Y = Indexed; U = Indexed as unique and constrained. Add a number to link indices to make compound indices (eg. all fields marked "U1" would make 1 compound index and constraint)',
+                        'Sequence Start':'Add a sequence linked to the field. If a number is provided, this will be the first number in the sequence. If a sequence name is provided, it will reuse the sequence named instead.',
+                        'Pop by Trigger':'Should field be auto-populated from sequence by trigger? Y if yes, else no',
+                        'Invisible':'Should field be hidden from select * queries? Y if yes, else no',
+                        'Virtual':'Should field be a virtual field? Y if yes, else no. Define the expression to be used in the next field.',
+                        'Virtual Expression':'Expression to evaluate for the fields value, if Virtual = Y.',
+                        'Simple Check Constraint':'Formula for a basic Check Constraint for restricting allowed values in a field.',
+                        'LOB Deduplication':'If field is a CLOB or BLOB type field, should deduplication be applied.',
+                        '"LOB Compression (LOW, MEDIUM, HIGH)"':'If field is a CLOB or BLOB type field, what level of storage compression should be used.',
+                        'LOB Caching':'If field is a CLOB or BLOB type field, should caching be used.',
+                        'LOB Logging':'If field is a CLOB or BLOB type field, should logging be enabled.',
+                        'FK to Table':'Foreign Key: Define the table to link field back to.',
+                        'FK to Field':'Foreign Key: Define the field to link field back to.',
+                        'Gen Audit Columns':'Should audit columns (u_name, u_date) be injected into this table. Also creates triggers to auto-populate these fields. Only applicable on first line of given table.',
+                        'Gen History Table (Automated)':'Should a history table be generated along with appropriate triggers to populate it. Only applicable on first line of given table.',
+                        'Table Comment':'Table level comment. Only applicable on first line of given table.',
+                        'Column Comment':'Field comment',
+                        }
+grant_header_comments = {
+                        'Schema':'Schema Name to be used',
+                        'Table':'Table Name to be used',
+                        'User':'Username or Role to be assigned permission',
+                        'Insert':'Add X in column if user/role should be assigned this permission. SELECT permission is assumed if ID is included at all',
+                        'Update':'Add X in column if user/role should be assigned this permission. SELECT permission is assumed if ID is included at all',
+                        'Delete':'Add X in column if user/role should be assigned this permission. SELECT permission is assumed if ID is included at all'
+                        }
 
 import sql_script as sql
 import build_script as build
@@ -87,8 +145,12 @@ logger.basicConfig(level= logging.getLevelName(config['logging']['level']['setti
 
 # Load settings from config file (config.py -> conf.json)
 outputDir = config['files']['output-directory']['setting']
-csvfile = config['files']['schema-file']['setting']
-grantsFile = config['files']['grants-file']['setting']
+fileType = config['files']['schema-file-type']['setting']
+csvfile = config['files']['schema-file-csv']['setting']
+grantsFile = config['files']['grants-file-csv']['setting']
+xlsxFile = config['files']['schema-file']['setting']
+
+sortColumns = config['sorting']['columns-nullable']['setting']
 
 history_package = config['history-tables']['use-procedures']['setting']
 
@@ -97,6 +159,29 @@ doClean = config['clean-script']['setting']
 # Dictionary to hold tables to process
 tables = {}
 tableCount: int
+
+todo = []
+todoGrants = []
+
+def mergeListtoString(toMerge: list) -> str:
+    """
+    mergeListtoString(toMerge)
+
+    Takes a provided list and converts it into a single string that is comma-delimited
+ 
+    Parameters:
+        csvrow: tuple
+            Unprocessed row from formatted CSV file, addressed by numeric index
+
+    Returns:
+        str
+            String of all the contents of the provided list in a comma-delimited format
+    """
+
+    outString = ''
+    for i in toMerge:
+        outString = f'{outString}{i},'
+    return outString.rstrip(',')
 
 
 def convertToDict(csvrow: tuple, grantFile: bool) -> dict:
@@ -144,7 +229,7 @@ def convertToDict(csvrow: tuple, grantFile: bool) -> dict:
     return d
 
 
-def csvRead(filename: str, grantFile: bool = False) -> list:
+def csvRead(filename: str, grantFile: bool = False):
     """
     csvRead(filename, grantFile)
 
@@ -163,23 +248,16 @@ def csvRead(filename: str, grantFile: bool = False) -> list:
             List of dictionaries (one per row) in CSV file
     """
 
-    todo = []
+    todotemp = []
     
     # If file defined is not found, generate a new copy with the appropriate headers
     if not os.path.exists(filename):
         logger.info('Generating file...')
         with open(filename, 'w') as file:
             if grantFile:
-                file.write(
-                            'Schema,' \
-                            'Table,' \
-                            'User,' \
-                            'Insert,' \
-                            'Update,' \
-                            'Delete'
-                            )
+                file.write(mergeListtoString(grant_headers))
             else:
-                file.write(schema_headers)
+                file.write(mergeListtoString(schema_headers))
     
     # If file is found, process rows
     else:
@@ -194,11 +272,128 @@ def csvRead(filename: str, grantFile: bool = False) -> list:
     
                     # Convert row to dictionary to allow key-based lookup of values
                     rowdict = convertToDict(row, grantFile)
-                    todo.append(rowdict)
+                    if grantFile:
+                        todoGrants.append(rowdict)
+                    else:
+                        todo.append(rowdict)
                 elif firstrow:
                     firstrow = False
     # If file not found and generated, 'todo' will be empty list and have nothing to process
-    return todo
+
+
+def xlsxRead(filename: str):
+    """
+    xlsxRead(filename)
+
+    Reads an XLSX file and parses out the data. 
+    Skips blank lines or header rows (so these can and *should* be left in the file)
+ 
+    Parameters:
+        filename: str
+            Path string of file to be processed
+    """
+    
+    # If file defined is not found, generate a new copy with the appropriate headers
+    if not os.path.exists(filename):
+        logger.info('Generating xlsx file...')
+        wb = xl.Workbook()
+        schema_sheet = wb.active
+        schema_sheet.title = 'Schema Design'
+        schema_sheet.sheet_properties.tabColor = '009900'
+        grants_sheet = wb.create_sheet('Grants')
+        grants_sheet.sheet_properties.tabColor = '000099'
+
+        for i in range(0, len(grant_headers)):
+            cell = grants_sheet.cell(row=1, column=i+1)
+            if cell.value == None: 
+                cell.value = grant_headers[i]
+                cell.style = 'Headline 3'
+                try:
+                    cell.comment = Comment(grant_header_comments[grant_headers[i]], __author__, 75, 500)
+                except:
+                    logger.warning(f'No comment defined for Grant header: {grant_headers[i]}')
+            
+        for i in range(0, len(schema_headers)):
+            cell = schema_sheet.cell(row=1, column=i+1)
+            if cell.value == None: 
+                cell.value = schema_headers[i]
+                cell.style = 'Headline 3'
+                try:
+                    cell.comment = Comment(schema_header_comments[schema_headers[i]], __author__, 75, 500)
+                except:
+                    logger.warning(f'No comment defined for Grant header: {schema_headers[i]}')
+        
+        grants_sheet.freeze_panes = grants_sheet['A2']
+        schema_sheet.freeze_panes = schema_sheet['A2']
+
+        wb.save(filename)
+
+    # If file is found, process rows
+    else:
+        # Load xlsx Workbook
+        wb = xl.load_workbook(filename)
+        schema_sheet = wb['Schema Design']
+        grants_sheet = wb['Grants']
+        # Check Schema column headers, insert any new columns needed
+        tot_schema_header = len(schema_headers)
+        for i in range(0, tot_schema_header):
+            cell = schema_sheet.cell(row=1, column=i+1)
+            if cell.value != schema_headers[i]:
+                logger.debug(f'Missing Schema header: {schema_headers[i]}')
+                schema_sheet.insert_cols(i+1)
+                cell = schema_sheet.cell(row=1, column=i+1)
+                cell.value = schema_headers[i]
+        # Are there extra columns at the end of the sheet? If so, delete them
+        extra_cols = schema_sheet.max_column > tot_schema_header
+        logger.debug(f'Extra columns found in Schema sheet: {extra_cols}')
+        if extra_cols:
+            to_delete = schema_sheet.max_column - tot_schema_header
+            logger.warning(f'Deleting {to_delete} columns from Schema Design worksheet')
+            schema_sheet.delete_cols(tot_schema_header + 1, to_delete)
+        # Check Grant column headers, insert any new columns needed
+        tot_grant_header = len(grant_headers)
+        for i in range(0, tot_grant_header):
+            cell = grants_sheet.cell(row=1, column=i+1)
+            if cell.value != grant_headers[i]:
+                logger.debug(f'Missing Grant header: {grant_headers[i]}')
+                grants_sheet.insert_cols(i+1)
+                cell = grants_sheet.cell(row=1, column=i+1)
+                cell.value = grant_headers[i]
+        # Are there extra columns at the end of the sheet? If so, delete them
+        extra_cols = grants_sheet.max_column > tot_grant_header
+        logger.debug(f'Extra columns found in Grants sheet: {extra_cols}')
+        if extra_cols:
+            to_delete = grants_sheet.max_column - tot_grant_header
+            logger.warning(f'Deleting {to_delete} columns from Grants worksheet')
+            grants_sheet.delete_cols(tot_grant_header + 1, to_delete)
+        
+        wb.save(filename)
+
+        # Read contents into dictionary (Schema)
+        holdrows = schema_sheet.iter_rows(min_row=2, values_only=True)
+        for row in holdrows:
+            if row[0] != None:
+                row_work = default_schema_row.copy()
+                for (index, key) in enumerate(row_work):
+                    xlsxvalue = row[index]
+                    if xlsxvalue == None:
+                        row_work[key] = ''
+                    else:
+                        row_work[key] = str(xlsxvalue)
+                todo.append(row_work)
+
+        # Read contents into dictionary (Grants)
+        holdrows = grants_sheet.iter_rows(min_row=2, values_only=True)
+        for row in holdrows:
+            if row[0] != None:
+                row_work = default_grant_row.copy()
+                for (index, key) in enumerate(row_work):
+                    xlsxvalue = row[index]
+                    if xlsxvalue == None:
+                        row_work[key] = ''
+                    else:
+                        row_work[key] = str(xlsxvalue)
+                todoGrants.append(row_work)
 
 
 def generateHistoryTables(table: Table, tableNum: int):
@@ -235,6 +430,10 @@ def processTable(table: Table):
         logger.info('Injecting audit columns...')
         table.genAuditColumns()
         sql.writeAuditTrigger(table.schema, table.name)
+
+    # If sorting is enabled via config, do so now
+    if sortColumns:
+        table.sortColumns()
 
     # If table has a comment, add to comment queue (written at end)
     if table.comment != '':
@@ -389,7 +588,12 @@ def main():
     # If successfully deleted and recreated the output directory, continue
     if cleandir: 
         # Read Schema CSV (grantFile = False default invoked)
-        todo = csvRead(csvfile) 
+        if fileType.lower() == 'csv':
+            csvRead(csvfile)
+        elif fileType.lower() == 'xlsx':
+            xlsxRead(xlsxFile)
+        else:
+            logger.error(f'Invalid file type defined in config: {fileType}')
         tableCount = 1
         for row in todo:
             schematable = f'{row["schema"]}.{row["table"]}'
@@ -413,6 +617,7 @@ def main():
                 newcol.load(row)
                 tables[schematable].addColumn(newcol)
         logger.info('All tables and fields loaded')
+        
         holdTables = tables.copy()
         # Extract and create History Tables
         for key in holdTables.keys():
@@ -432,7 +637,8 @@ def main():
         sql.writeComments()
 
         # Read Grants CSV and process contents
-        todoGrants = csvRead(grantsFile, True)
+        if fileType.lower() == 'csv':
+            csvRead(grantsFile, True)
         with ThreadPoolExecutor(threads) as pool:
             pool.map(addGrant, todoGrants)
         logger.info('Saving Grants for all tables')

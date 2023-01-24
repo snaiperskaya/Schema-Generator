@@ -1,8 +1,8 @@
 # Schema Generator
 <br/><br/>
-Script that takes a formatted CSV file of database information and generates all the DDL scripts needed to implement in the database (Oracle)
+Script that takes a formatted CSV or XLSX file of database information and generates all the DDL scripts needed to implement in the database (Oracle)
 <br/><br/>
-Built and tested using Python 3.8. Requires Python 3.7+
+Built and tested using Python 3.8, 3.10. Requires Python 3.7+
 <br/><br/>
 Currently generates the following scripts:
 - Table (including columns, datatypes, options (not null, default, etc.))
@@ -33,9 +33,9 @@ Currently generates the following scripts:
 		- LOB Defaults: Default settings to use for LOB-type fields if not defined in CSV
 <br/><br/>
 # To use application from EXE (in 'dist' folder):
-- Run once to generate empty CSV documents and config file
+- Run once to generate empty CSV or XLSX document(s) and config file
 <br/><br/>
-- Fill in CSVs:
+- Fill in input file:
     - Grants file uses 'X' in the grant type columns to denote inclusion
         - Example: 'X' in the 'INSERT' column denotes 'GRANT SELECT, INSERT ON <x> TO <y>'
         - SELECT is always granted to a user in the file for a given table. A user in the file with no 'X' in other type fields will only be granted SELECT

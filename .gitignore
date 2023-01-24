@@ -6,7 +6,9 @@ runme.cmd
 *input/
 *output/
 *.csv
+*.xlsx
 __pycache__/
 conf.json
 *.zip
 *.7z
+.vscode/
