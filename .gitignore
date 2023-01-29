@@ -2,7 +2,9 @@
 *.log
 build
 buildExe.cmd
+buildExe.bat
 runme.cmd
+runme.bat
 *input/
 *output/
 *.csv

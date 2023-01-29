@@ -3,7 +3,7 @@
 """schema_generator.py: Main module to parse csv and generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "23.01.23.0"
+__version__ = "23.01.25.0"
 
 import logging
 import os
@@ -45,6 +45,8 @@ default_schema_row = { # Order of columns in file
                 "fk_to_field": '',
                 "gen_audit_columns": '',
                 "gen_history_tables": '',
+                "loader_package": '',
+                "loader_parent_table": '',
                 "table_comment": '',
                 "column_comment": ''
                 }
@@ -74,13 +76,15 @@ schema_headers = [
                 'Virtual Expression',
                 'Simple Check Constraint',
                 'LOB Deduplication',
-                '"LOB Compression (LOW, MEDIUM, HIGH)"',
+                'LOB Compression (LOW/MEDIUM/HIGH)',
                 'LOB Caching',
                 'LOB Logging',
                 'FK to Table',
                 'FK to Field',
                 'Gen Audit Columns',
                 'Gen History Table (Automated)',
+                'Include in Loader Package',
+                'Parent table for Loader',
                 'Table Comment',
                 'Column Comment'
                 ]
@@ -112,13 +116,15 @@ schema_header_comments = {
                         'Virtual Expression':'Expression to evaluate for the fields value, if Virtual = Y.',
                         'Simple Check Constraint':'Formula for a basic Check Constraint for restricting allowed values in a field.',
                         'LOB Deduplication':'If field is a CLOB or BLOB type field, should deduplication be applied.',
-                        '"LOB Compression (LOW, MEDIUM, HIGH)"':'If field is a CLOB or BLOB type field, what level of storage compression should be used.',
+                        'LOB Compression (LOW/MEDIUM/HIGH)':'If field is a CLOB or BLOB type field, what level of storage compression should be used.',
                         'LOB Caching':'If field is a CLOB or BLOB type field, should caching be used.',
                         'LOB Logging':'If field is a CLOB or BLOB type field, should logging be enabled.',
                         'FK to Table':'Foreign Key: Define the table to link field back to.',
                         'FK to Field':'Foreign Key: Define the field to link field back to.',
                         'Gen Audit Columns':'Should audit columns (u_name, u_date) be injected into this table. Also creates triggers to auto-populate these fields. Only applicable on first line of given table.',
                         'Gen History Table (Automated)':'Should a history table be generated along with appropriate triggers to populate it. Only applicable on first line of given table.',
+                        'Include in Loader Package': 'Should table be included in a loader package for INSERT, UPDATE, DELETE statements. Value should either be Y for a generically named package or should be the name of the package. Only applicable on the first line of given table.',
+                        'Parent table for Loader': 'If applicable, should be the name of the parent table to the given table. Only applicable on the first line of given table.',
                         'Table Comment':'Table level comment. Only applicable on first line of given table.',
                         'Column Comment':'Field comment',
                         }
@@ -153,6 +159,8 @@ xlsxFile = config['files']['schema-file']['setting']
 sortColumns = config['sorting']['columns-nullable']['setting']
 
 history_package = config['history-tables']['use-procedures']['setting']
+
+loader_package = config['loader-package']['enable']['setting']
 
 doClean = config['clean-script']['setting']
 
@@ -321,79 +329,112 @@ def xlsxRead(filename: str):
                 try:
                     cell.comment = Comment(schema_header_comments[schema_headers[i]], __author__, 75, 500)
                 except:
-                    logger.warning(f'No comment defined for Grant header: {schema_headers[i]}')
+                    logger.warning(f'No comment defined for Schema header: {schema_headers[i]}')
         
-        grants_sheet.freeze_panes = grants_sheet['A2']
-        schema_sheet.freeze_panes = schema_sheet['A2']
+        grants_sheet.freeze_panes = grants_sheet['D2']
+        schema_sheet.freeze_panes = schema_sheet['D2']
 
-        wb.save(filename)
+        try:
+            wb.save(filename)
+        except:
+            logger.error('Unable to save XLSX workbook. May be already open in another process.')
+        wb.close()
 
     # If file is found, process rows
     else:
+        can_load = False
         # Load xlsx Workbook
-        wb = xl.load_workbook(filename)
-        schema_sheet = wb['Schema Design']
-        grants_sheet = wb['Grants']
-        # Check Schema column headers, insert any new columns needed
-        tot_schema_header = len(schema_headers)
-        for i in range(0, tot_schema_header):
-            cell = schema_sheet.cell(row=1, column=i+1)
-            if cell.value != schema_headers[i]:
-                logger.debug(f'Missing Schema header: {schema_headers[i]}')
-                schema_sheet.insert_cols(i+1)
+        try:
+            wb = xl.load_workbook(filename)
+            can_load = True
+        except:
+            logger.error('Unable to load XLSX workbook. May be already open in another process.')
+        if can_load:
+            schema_sheet = wb['Schema Design']
+            grants_sheet = wb['Grants']
+            is_updated = False
+            # Check Schema column headers, insert any new columns needed
+            tot_schema_header = len(schema_headers)
+            for i in range(0, tot_schema_header):
                 cell = schema_sheet.cell(row=1, column=i+1)
-                cell.value = schema_headers[i]
-        # Are there extra columns at the end of the sheet? If so, delete them
-        extra_cols = schema_sheet.max_column > tot_schema_header
-        logger.debug(f'Extra columns found in Schema sheet: {extra_cols}')
-        if extra_cols:
-            to_delete = schema_sheet.max_column - tot_schema_header
-            logger.warning(f'Deleting {to_delete} columns from Schema Design worksheet')
-            schema_sheet.delete_cols(tot_schema_header + 1, to_delete)
-        # Check Grant column headers, insert any new columns needed
-        tot_grant_header = len(grant_headers)
-        for i in range(0, tot_grant_header):
-            cell = grants_sheet.cell(row=1, column=i+1)
-            if cell.value != grant_headers[i]:
-                logger.debug(f'Missing Grant header: {grant_headers[i]}')
-                grants_sheet.insert_cols(i+1)
+                if cell.value != schema_headers[i]:
+                    logger.debug(f'Missing Schema header: {schema_headers[i]}')
+                    schema_sheet.insert_cols(i+1)
+                    cell = schema_sheet.cell(row=1, column=i+1)
+                    cell.value = schema_headers[i]
+                    cell.style = 'Headline 3'
+                    try:
+                        cell.comment = Comment(schema_header_comments[schema_headers[i]], __author__, 75, 500)
+                    except:
+                        logger.warning(f'No comment defined for Schema header: {schema_headers[i]}')
+                    is_updated = True
+            # Are there extra columns at the end of the sheet? If so, delete them
+            extra_cols = schema_sheet.max_column > tot_schema_header
+            logger.debug(f'Extra columns found in Schema sheet: {extra_cols}')
+            if extra_cols:
+                to_delete = schema_sheet.max_column - tot_schema_header
+                logger.warning(f'Deleting {to_delete} columns from Schema Design worksheet')
+                schema_sheet.delete_cols(tot_schema_header + 1, to_delete)
+                is_updated = True
+            # Check Grant column headers, insert any new columns needed
+            tot_grant_header = len(grant_headers)
+            for i in range(0, tot_grant_header):
                 cell = grants_sheet.cell(row=1, column=i+1)
-                cell.value = grant_headers[i]
-        # Are there extra columns at the end of the sheet? If so, delete them
-        extra_cols = grants_sheet.max_column > tot_grant_header
-        logger.debug(f'Extra columns found in Grants sheet: {extra_cols}')
-        if extra_cols:
-            to_delete = grants_sheet.max_column - tot_grant_header
-            logger.warning(f'Deleting {to_delete} columns from Grants worksheet')
-            grants_sheet.delete_cols(tot_grant_header + 1, to_delete)
-        
-        wb.save(filename)
+                if cell.value != grant_headers[i]:
+                    logger.debug(f'Missing Grant header: {grant_headers[i]}')
+                    grants_sheet.insert_cols(i+1)
+                    cell = grants_sheet.cell(row=1, column=i+1)
+                    cell.value = grant_headers[i]
+                    cell.style = 'Headline 3'
+                    try:
+                        cell.comment = Comment(grant_header_comments[grant_headers[i]], __author__, 75, 500)
+                    except:
+                        logger.warning(f'No comment defined for Grant header: {grant_headers[i]}')
+                    is_updated = True
+            # Are there extra columns at the end of the sheet? If so, delete them
+            extra_cols = grants_sheet.max_column > tot_grant_header
+            logger.debug(f'Extra columns found in Grants sheet: {extra_cols}')
+            if extra_cols:
+                to_delete = grants_sheet.max_column - tot_grant_header
+                logger.warning(f'Deleting {to_delete} columns from Grants worksheet')
+                grants_sheet.delete_cols(tot_grant_header + 1, to_delete)
+                is_updated = True
+            
+            if is_updated:
+                logger.info('XLSX Workbook modified. Attempting to save changes...')
+                try:
+                    wb.save(filename)
+                    logger.info('XLSX Workbook saved successfully!')
+                except:
+                    logger.error('Unable to save XLSX workbook. May be already open in another process.')
 
-        # Read contents into dictionary (Schema)
-        holdrows = schema_sheet.iter_rows(min_row=2, values_only=True)
-        for row in holdrows:
-            if row[0] != None:
-                row_work = default_schema_row.copy()
-                for (index, key) in enumerate(row_work):
-                    xlsxvalue = row[index]
-                    if xlsxvalue == None:
-                        row_work[key] = ''
-                    else:
-                        row_work[key] = str(xlsxvalue)
-                todo.append(row_work)
+            # Read contents into dictionary (Schema)
+            holdrows = schema_sheet.iter_rows(min_row=2, values_only=True)
+            for row in holdrows:
+                if row[0] != None:
+                    row_work = default_schema_row.copy()
+                    for (index, key) in enumerate(row_work):
+                        xlsxvalue = row[index]
+                        if xlsxvalue == None:
+                            row_work[key] = ''
+                        else:
+                            row_work[key] = str(xlsxvalue)
+                    todo.append(row_work)
 
-        # Read contents into dictionary (Grants)
-        holdrows = grants_sheet.iter_rows(min_row=2, values_only=True)
-        for row in holdrows:
-            if row[0] != None:
-                row_work = default_grant_row.copy()
-                for (index, key) in enumerate(row_work):
-                    xlsxvalue = row[index]
-                    if xlsxvalue == None:
-                        row_work[key] = ''
-                    else:
-                        row_work[key] = str(xlsxvalue)
-                todoGrants.append(row_work)
+            # Read contents into dictionary (Grants)
+            holdrows = grants_sheet.iter_rows(min_row=2, values_only=True)
+            for row in holdrows:
+                if row[0] != None:
+                    row_work = default_grant_row.copy()
+                    for (index, key) in enumerate(row_work):
+                        xlsxvalue = row[index]
+                        if xlsxvalue == None:
+                            row_work[key] = ''
+                        else:
+                            row_work[key] = str(xlsxvalue)
+                    todoGrants.append(row_work)
+
+            wb.close()
 
 
 def generateHistoryTables(table: Table, tableNum: int):

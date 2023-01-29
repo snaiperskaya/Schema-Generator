@@ -3,7 +3,7 @@
 """config.py: Module for creating and loading .json config file"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "23.01.19.0"
+__version__ = "23.01.25.0"
 
 import json
 import os
@@ -64,6 +64,16 @@ class Config:
             'sorting': {
                 'columns-nullable': {
                     'desc': "If true, sort all 'NOT NULL' columns to the beginning of column list. Can improve performance in Oracle. Default: false",
+                    'setting': False
+                }
+            },
+            'loader-package': {
+                'enable': {
+                    'desc': "Use procedures / package structure for table loaders. Default: false",
+                    'setting': False
+                },
+                'use-logging': {
+                    'desc': "Implement PL/SQL logging in procedures. Default: false",
                     'setting': False
                 }
             },

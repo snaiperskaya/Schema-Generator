@@ -3,28 +3,31 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "22.11.09.0"
+__version__ = "23.01.26.0"
 
 import os
-import logging 
 from schema_generator import logger, config
+from table import Table, Column
 
 # Load settings from config file (config.py -> conf.json)
 use_package = config['history-tables']['use-procedures']['setting']
 use_sql_logging = config['history-tables']['use-logging']['setting']
+loader_package = config['loader-package']['enable']['setting']
+loader_package_logging = config['loader-package']['use-logging']['setting']
 split_on = config['formatting']['split_on']['setting']
 table_min_spacing = config['formatting']['table_min_spacing']['setting']
 
 outputDir = config['files']['output-directory']['setting']
 
 # Template for history package temp storage
-history_package_template = {
+package_template = {
     'header': [],
     'body': []
 }
 
 # Initialize variables to use
 history_package_schema = {}
+loader_package_schema = {}
 comments = []
 grants = []
 
@@ -855,7 +858,7 @@ def saveHistoryProcedure(schema: str, tablename: str, columns: list) -> str:
 
     # If schema not yet in history_package_schema, create a new entry and apply the history package template
     if schema not in history_package_schema.keys():
-        history_package_schema[schema] = history_package_template
+        history_package_schema[schema] = package_template.copy()
     history = history_package_schema[schema]
 
     # Start of error message to include in EXCEPTION block
@@ -979,6 +982,197 @@ def writeHistoryPackage(outdirectory: str = outputDir):
             logger.info(f'Writing {app_account}_HISTORY_BODY to file')
             os.makedirs(directory, exist_ok = True)
             with open(f'{directory}{app_account}_HISTORY_BODY.sql', 'w') as f:
+                f.write(to_write)
+
+
+def addToLoaderPackage(schema: str, tables: list):
+    """
+    addToLoaderPackage(schema, tables)
+
+    Core method to call to generate Loader scripts. 
+    Will start loader package details if first run for schema provided.
+    If multiple tables present in 'tables', they should be parent, grandparent, etc. tables in order
+ 
+    Parameters:
+        schema: str
+            Database schema the table will reside in
+        tablename: str
+            List of tables listed, in order, from child [0] to highest level of parentage [n]
+    """
+
+    # Check if Schema has a record in loader_package_schema. If not, create using template
+    if schema not in loader_package_schema.keys():
+        loader_package_schema[schema] = package_template.copy()
+    addInsertUpdateToLoaderPackage(schema, tables)
+    addDeleteToLoaderPackage(schema, tables)
+
+
+def addInsertUpdateToLoaderPackage(schema: str, tables: list):
+    """
+    addInsertUpdateToLoaderPackage(schema, tables)
+
+    Generates a DDL statement for an Insert-or-Update statement for a given table. 
+    If multiple tables present in 'tables', they should be parent, grandparent, etc. tables in order
+ 
+    Parameters:
+        schema: str
+            Database schema the table will reside in
+        tables: list
+            List of tables listed, in order, from child [0] to highest level of parentage [n]
+    """
+    
+    loader = loader_package_schema[schema]
+    tablename = tables[0].name
+    columns = []
+    for table in tables:
+        for col in table.columns:
+            columns.append((col, table.name))
+
+    # Define procedure name and tablespace
+    proc_name = f'P_LOAD_{tablename}'
+    tablespace = schema.upper().split('_OWNER')[0]
+
+    # Start of error message to include in EXCEPTION block
+    log_error = f'{tab}{tab}{tab}message_out := \'Error inserting into history table {schema}.H_{tablename} - Error: \' || sqlerrm;\n'
+
+    # If config option 'use-logging' is True, include additional lines for logging
+    if loader_package_logging:
+        log_error = f'{log_error}{tab}{tab}{tab}{tablespace}_LOGGER.LOGGING_UTL.LOG(message_out, \'{tablespace}_HISTORY.{proc_name}\');'
+    
+    # Compile columns into strings for params, values, and columns for insert with formatting
+    spacing = ' ' * (table_min_spacing - 4)
+    formatted_params_all = ''
+    formatted_insert_columns = ''
+    formatted_insert_values = ''
+    formatted_update_columns = ''
+    count_split = 1
+    for col in columns:
+        name = col[0].field
+        type = col[0].type
+        io = ('IN', 'in')
+        if col[0].primarykey and col[1] == tablename:
+            io = ('IN OUT', 'io')
+        if len(col[0]) > table_min_spacing:
+            spacing = ' ' * 2
+        else:
+            spacing = ' ' * (table_min_spacing - len(col[0]))
+        newline = ''
+        if len(formatted_insert_values) >= (split_on * count_split):
+            newline = f'\n{tab}{tab}'
+            count_split += 1
+        formatted_params_all = f'{formatted_params_all}{tab}{tab}, p_{io[1]}_{name.lower()}{spacing}{io[0]}{tab}{tab}{type}\n'
+        formatted_insert_columns = f'{formatted_insert_columns}{newline}, {name}'
+        formatted_insert_values = f'{formatted_insert_values}{newline}, p_{io[1]}_{name.lower()}'
+
+    # Populate HEADER template for PACKAGE
+    to_save_header = f'{tab}PROCEDURE {proc_name}\n' \
+                    f'{tab}(\n' \
+                    f'{formatted_params_all}' \
+                    f'{tab});'
+
+    # Populate BODY template for PACKAGE
+    to_save_body = f'{tab}PROCEDURE {proc_name}\n' \
+                    f'{tab}(\n' \
+                    f'{formatted_params_all}' \
+                    f'{tab}) IS\n' \
+                    f'{tab}{tab}message_out VARCHAR2(4000);\n' \
+                    f'{tab}BEGIN\n' \
+                    f'{tab}INSERT INTO {schema}.H_{tablename} (\n'\
+                    f'{formatted_insert_columns}\n' \
+                    f'{tab}) VALUES (\n' \
+                    f'{formatted_insert_values}\n'\
+                    f'{tab});\n' \
+                    f'{tab}EXCEPTION\n' \
+                    f'{tab}{tab}WHEN OTHERS THEN\n' \
+                    f'{log_error}\n' \
+                    f'{tab}{tab}{tab}raise_application_error (-20000, message_out);\n' \
+                    f'{tab}END {proc_name};\n'
+    
+    # Add HEADER and BODY to loader_package_schema to be written at end
+    loader['header'].append(to_save_header)
+    loader['body'].append(to_save_body)
+
+
+
+def addDeleteToLoaderPackage(schema: str, tables: list):
+    """
+    addDeleteToLoaderPackage(schema, tables)
+
+    Generates a DDL statement for an Delete statement for a given table. 
+    If multiple tables present in 'tables', they should be parent, grandparent, etc. tables in order
+ 
+    Parameters:
+        schema: str
+            Database schema the table will reside in
+        tables: list
+            List of tables listed, in order, from child [0] to highest level of parentage [n]
+    """
+    
+    loader = loader_package_schema[schema]
+
+
+def writeLoaderPackage(outdirectory: str = outputDir):
+    """
+    writeLoaderPackage(outDirectory)
+
+    Compiles Loader PACKAGE and outputs to output\PACKAGE and output\PACKAGE_BODIES
+ 
+    Parameters:
+        outDirectory: str
+            Output directory. Defaults to value from config file
+    """
+
+    # Iterate over schemas in loader_package_schema
+    for schema in loader_package_schema.keys():
+        # Get basic app account for adding to embedded GRANT statement
+        app_account = schema.upper().split('_OWNER')[0]
+        logger.info(f'Creating package scripts for {schema}.LOADER')
+        loader = loader_package_schema[schema]
+
+        # If HEADER and BODY have different numbers of items, an error has occurred
+        if len(loader['header']) != len(loader['body']):
+            logger.error('Unable to generate package: Header and Body do not match')
+        
+        # If there are items in the loader_package, continue
+        elif len(loader['header']) > 0:
+
+            # Populate beginning of PACKAGE script
+            to_write = f'prompt -- Adding {schema}.{app_account}_LOADER package\n\n' \
+                        f'CREATE OR REPLACE PACKAGE {schema}.{app_account}_LOADER AS\n\n'
+            
+            # Append each procedure header to PACKAGE script
+            for proc in loader['header']:
+                to_write = f'{to_write}{proc}\n\n'
+
+            # Append ending to PACKAGE script
+            to_write = f'{to_write}END {app_account}_LOADER;\n/\n\n' \
+                        f'GRANT EXECUTE ON {schema}.{app_account}_LOADER TO {app_account};\n/\n\n' \
+                        f'show errors package {schema}.{app_account}_LOADER'
+            
+            # Write script to file in output/PACKAGES. Will create directory if missing
+            directory = f'{outdirectory}\\PACKAGES\\'
+            logger.info(f'Writing {schema}-{app_account}_LOADER_HEADER to file')
+            os.makedirs(directory, exist_ok = True)
+            with open(f'{directory}{app_account}_LOADER_HEADER.sql', 'w') as f:
+                f.write(to_write)
+
+            # Populate beginning of PACKAGE BODY script
+            to_write = f'prompt -- Adding {schema}.{app_account}_LOADER package body\n\n' \
+                        f'CREATE OR REPLACE PACKAGE BODY {schema}.{app_account}_LOADER AS\n\n'
+
+            # Append each procedure to PACKAGE script
+            for proc in loader['body']:
+                to_write = f'{to_write}{proc}\n\n'
+
+            # Append ending to PACKAGE BODY script
+            to_write = f'{to_write}END {app_account}_LOADER;\n/\n\n' \
+                        f'show errors package {schema}.{app_account}_LOADER'
+
+            # Write script to file in output/PACKAGE_BODIES. Will create directory if missing
+            directory = f'{outdirectory}\\PACKAGE_BODIES\\'
+            logger.info(f'Writing {app_account}_LOADER_BODY to file')
+            os.makedirs(directory, exist_ok = True)
+            with open(f'{directory}{app_account}_LOADER_BODY.sql', 'w') as f:
                 f.write(to_write)
 
 
