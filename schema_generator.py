@@ -3,13 +3,14 @@
 """schema_generator.py: Main module to parse csv and generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "23.01.25.0"
+__version__ = "23.02.03.0"
 
 import logging
 import os
 import csv
 import time
 import shutil
+import copy
 import openpyxl as xl
 from openpyxl.comments import Comment
 from concurrent.futures import ThreadPoolExecutor
@@ -58,6 +59,13 @@ default_grant_row = { #Order of columns in file
                 "update": '',
                 "delete": ''
                 }
+
+default_grantexec_row = { #Order of columns in file
+                "schema": '',
+                "proc": '',
+                "user": ''
+                }
+
 schema_headers = [
                 'Schema',
                 'Table',
@@ -91,11 +99,17 @@ schema_headers = [
 
 grant_headers = [
                 'Schema',
-                'Table',
+                'Table/View',
                 'User',
                 'Insert',
                 'Update',
                 'Delete'
+                ]
+
+grantexec_headers = [
+                'Schema',
+                'Package/Procedure/Function',
+                'User'
                 ]
 
 schema_header_comments = {
@@ -124,17 +138,22 @@ schema_header_comments = {
                         'Gen Audit Columns':'Should audit columns (u_name, u_date) be injected into this table. Also creates triggers to auto-populate these fields. Only applicable on first line of given table.',
                         'Gen History Table (Automated)':'Should a history table be generated along with appropriate triggers to populate it. Only applicable on first line of given table.',
                         'Include in Loader Package': 'Should table be included in a loader package for INSERT, UPDATE, DELETE statements. Value should either be Y for a generically named package or should be the name of the package. Only applicable on the first line of given table.',
-                        'Parent table for Loader': 'If applicable, should be the name of the parent table to the given table. Only applicable on the first line of given table.',
+                        'Parent table for Loader': 'If applicable, should be the name of the parent table to the given table. MUST BE FROM SAME SCHEMA DEFINITION FILE AND ALSO LOADED. Only applicable on the first line of given table.',
                         'Table Comment':'Table level comment. Only applicable on first line of given table.',
                         'Column Comment':'Field comment',
                         }
 grant_header_comments = {
                         'Schema':'Schema Name to be used',
-                        'Table':'Table Name to be used',
+                        'Table/View':'Table or View Name to be used',
                         'User':'Username or Role to be assigned permission',
                         'Insert':'Add X in column if user/role should be assigned this permission. SELECT permission is assumed if ID is included at all',
                         'Update':'Add X in column if user/role should be assigned this permission. SELECT permission is assumed if ID is included at all',
                         'Delete':'Add X in column if user/role should be assigned this permission. SELECT permission is assumed if ID is included at all'
+                        }
+grantexec_header_comments = {
+                        'Schema':'Schema Name to be used',
+                        'Package/Procedure/Function':'Executable Name to be used',
+                        'User':'Username or Role to be assigned EXECUTE permission'
                         }
 
 import sql_script as sql
@@ -170,6 +189,10 @@ tableCount: int
 
 todo = []
 todoGrants = []
+todoGrantsExecute = []
+
+addGrants = []
+addGrantsExec = []
 
 def mergeListtoString(toMerge: list) -> str:
     """
@@ -223,7 +246,7 @@ def convertToDict(csvrow: tuple, grantFile: bool) -> dict:
     # Process as Schema type file
     else:
         # Populate default_schema_row template in file order
-        d = default_schema_row.copy()
+        d = copy.deepcopy(default_schema_row)
         index = 0
         try:
             for key in d.keys():
@@ -257,7 +280,7 @@ def csvRead(filename: str, grantFile: bool = False):
     """
 
     todotemp = []
-    
+
     # If file defined is not found, generate a new copy with the appropriate headers
     if not os.path.exists(filename):
         logger.info('Generating file...')
@@ -310,6 +333,8 @@ def xlsxRead(filename: str):
         schema_sheet.sheet_properties.tabColor = '009900'
         grants_sheet = wb.create_sheet('Grants')
         grants_sheet.sheet_properties.tabColor = '000099'
+        grantsexec_sheet = wb.create_sheet('Grants - Execute')
+        grantsexec_sheet.sheet_properties.tabColor = '009999'
 
         for i in range(0, len(grant_headers)):
             cell = grants_sheet.cell(row=1, column=i+1)
@@ -320,7 +345,17 @@ def xlsxRead(filename: str):
                     cell.comment = Comment(grant_header_comments[grant_headers[i]], __author__, 75, 500)
                 except:
                     logger.warning(f'No comment defined for Grant header: {grant_headers[i]}')
-            
+
+        for i in range(0, len(grantexec_headers)):
+            cell = grantsexec_sheet.cell(row=1, column=i+1)
+            if cell.value == None: 
+                cell.value = grantexec_headers[i]
+                cell.style = 'Headline 3'
+                try:
+                    cell.comment = Comment(grantexec_header_comments[grantexec_headers[i]], __author__, 75, 500)
+                except:
+                    logger.warning(f'No comment defined for Grants - Execute header: {grantexec_headers[i]}')
+
         for i in range(0, len(schema_headers)):
             cell = schema_sheet.cell(row=1, column=i+1)
             if cell.value == None: 
@@ -331,7 +366,8 @@ def xlsxRead(filename: str):
                 except:
                     logger.warning(f'No comment defined for Schema header: {schema_headers[i]}')
         
-        grants_sheet.freeze_panes = grants_sheet['D2']
+        grants_sheet.freeze_panes = grants_sheet['A2']
+        grantsexec_sheet.freeze_panes = grantsexec_sheet['A2']
         schema_sheet.freeze_panes = schema_sheet['D2']
 
         try:
@@ -350,8 +386,24 @@ def xlsxRead(filename: str):
         except:
             logger.error('Unable to load XLSX workbook. May be already open in another process.')
         if can_load:
-            schema_sheet = wb['Schema Design']
-            grants_sheet = wb['Grants']
+            try:
+                schema_sheet = wb['Schema Design']
+            except:
+                schema_sheet= wb.create_sheet('Schema Design')
+                schema_sheet.sheet_properties.tabColor = '009900'
+                schema_sheet.freeze_panes = schema_sheet['D2']
+            try:
+                grants_sheet = wb['Grants']
+            except:
+                grants_sheet = wb.create_sheet('Grants')
+                grants_sheet.sheet_properties.tabColor = '000099'
+                grants_sheet.freeze_panes = grants_sheet['A2']
+            try:
+                grantsexec_sheet = wb['Grants - Execute']
+            except:
+                grantsexec_sheet = wb.create_sheet('Grants - Execute')
+                grantsexec_sheet.sheet_properties.tabColor = '009999'
+                grantsexec_sheet.freeze_panes = grantsexec_sheet['A2']
             is_updated = False
             # Check Schema column headers, insert any new columns needed
             tot_schema_header = len(schema_headers)
@@ -376,6 +428,7 @@ def xlsxRead(filename: str):
                 logger.warning(f'Deleting {to_delete} columns from Schema Design worksheet')
                 schema_sheet.delete_cols(tot_schema_header + 1, to_delete)
                 is_updated = True
+            
             # Check Grant column headers, insert any new columns needed
             tot_grant_header = len(grant_headers)
             for i in range(0, tot_grant_header):
@@ -400,6 +453,30 @@ def xlsxRead(filename: str):
                 grants_sheet.delete_cols(tot_grant_header + 1, to_delete)
                 is_updated = True
             
+            # Check Grant column headers, insert any new columns needed
+            tot_grantexec_header = len(grantexec_headers)
+            for i in range(0, tot_grantexec_header):
+                cell = grantsexec_sheet.cell(row=1, column=i+1)
+                if cell.value != grantexec_headers[i]:
+                    logger.debug(f'Missing Grants: Execute header: {grantexec_headers[i]}')
+                    grantsexec_sheet.insert_cols(i+1)
+                    cell = grantsexec_sheet.cell(row=1, column=i+1)
+                    cell.value = grantexec_headers[i]
+                    cell.style = 'Headline 3'
+                    try:
+                        cell.comment = Comment(grantexec_header_comments[grantexec_headers[i]], __author__, 75, 500)
+                    except:
+                        logger.warning(f'No comment defined for Grants: Execute header: {grantexec_headers[i]}')
+                    is_updated = True
+            # Are there extra columns at the end of the sheet? If so, delete them
+            extra_cols = grantsexec_sheet.max_column > tot_grantexec_header
+            logger.debug(f'Extra columns found in Grants: Execute sheet: {extra_cols}')
+            if extra_cols:
+                to_delete = grantsexec_sheet.max_column - tot_grantexec_header
+                logger.warning(f'Deleting {to_delete} columns from Grants worksheet')
+                grantsexec_sheet.delete_cols(tot_grantexec_header + 1, to_delete)
+                is_updated = True
+            
             if is_updated:
                 logger.info('XLSX Workbook modified. Attempting to save changes...')
                 try:
@@ -412,7 +489,7 @@ def xlsxRead(filename: str):
             holdrows = schema_sheet.iter_rows(min_row=2, values_only=True)
             for row in holdrows:
                 if row[0] != None:
-                    row_work = default_schema_row.copy()
+                    row_work = copy.deepcopy(default_schema_row)
                     for (index, key) in enumerate(row_work):
                         xlsxvalue = row[index]
                         if xlsxvalue == None:
@@ -425,7 +502,7 @@ def xlsxRead(filename: str):
             holdrows = grants_sheet.iter_rows(min_row=2, values_only=True)
             for row in holdrows:
                 if row[0] != None:
-                    row_work = default_grant_row.copy()
+                    row_work = copy.deepcopy(default_grant_row)
                     for (index, key) in enumerate(row_work):
                         xlsxvalue = row[index]
                         if xlsxvalue == None:
@@ -434,7 +511,130 @@ def xlsxRead(filename: str):
                             row_work[key] = str(xlsxvalue)
                     todoGrants.append(row_work)
 
+            # Read contents into dictionary (Grants)
+            holdrows = grantsexec_sheet.iter_rows(min_row=2, values_only=True)
+            for row in holdrows:
+                if row[0] != None:
+                    row_work = copy.deepcopy(default_grantexec_row)
+                    for (index, key) in enumerate(row_work):
+                        xlsxvalue = row[index]
+                        if xlsxvalue == None:
+                            row_work[key] = ''
+                        else:
+                            row_work[key] = str(xlsxvalue)
+                    todoGrantsExecute.append(row_work)
+
             wb.close()
+
+
+def writeGrants(filename: str):
+    """
+    writeGrants(filename)
+
+    Writes to an XLSX file, adding basic grants for all known tables
+ 
+    Parameters:
+        filename: str
+            Path string of file to be processed
+    """
+
+    # If file is found, process rows
+    can_load = False
+    # Load xlsx Workbook
+    try:
+        wb = xl.load_workbook(filename)
+        can_load = True
+    except:
+        logger.error('Unable to load XLSX workbook. May be already open in another process.')
+    if can_load:
+        try:
+            grants_sheet = wb['Grants']
+        except:
+            grants_sheet = wb.create_sheet('Grants')
+            grants_sheet.sheet_properties.tabColor = '000099'
+            grants_sheet.freeze_panes = grants_sheet['A2']
+        row_num = 2
+        for grant in addGrants:
+            i = 1
+            for key in grant.keys():
+                cell = grants_sheet.cell(row=row_num, column=i)
+                cell.value = grant[key]
+                i += 1
+            todoGrants.append(grant)
+            row_num += 2
+        try:
+            wb.save(filename)
+            logger.info('XLSX Workbook saved successfully!')
+        except:
+            logger.error('Unable to save XLSX workbook. May be already open in another process.')
+        wb.close()
+
+
+def writeGrantsExec(filename: str):
+    """
+    writeGrants(filename)
+
+    Writes to an XLSX file, adding basic grants for all known tables
+ 
+    Parameters:
+        filename: str
+            Path string of file to be processed
+    """
+
+    # If file is found, process rows
+    can_load = False
+    # Load xlsx Workbook
+    try:
+        wb = xl.load_workbook(filename)
+        can_load = True
+    except:
+        logger.error('Unable to load XLSX workbook. May be already open in another process.')
+    if can_load:
+        try:
+            grantsexec_sheet = wb['Grants - Execute']
+        except:
+            grantsexec_sheet = wb.create_sheet('Grants - Execute')
+            grantsexec_sheet.sheet_properties.tabColor = '009999'
+            grantsexec_sheet.freeze_panes = grantsexec_sheet['A2']
+        row_num = 2
+        for grant in addGrantsExec:
+            i = 1
+            for key in grant.keys():
+                cell = grantsexec_sheet.cell(row=row_num, column=i)
+                cell.value = grant[key]
+                i += 1
+            todoGrantsExecute.append(grant)
+            row_num += 2
+        try:
+            wb.save(filename)
+            logger.info('XLSX Workbook saved successfully!')
+        except:
+            logger.error('Unable to save XLSX workbook. May be already open in another process.')
+        wb.close()
+
+
+def createGrant(schema: str, tablename: str, level: tuple):
+    app_account = schema.upper().split('_OWNER')[0]
+    addGrants.append({"schema": schema, 
+                      "table": tablename, 
+                      "user": app_account,
+                      "insert": level[0],
+                      "update": level[1],
+                      "delete": level[2]
+                      })
+
+
+def createGrantHistory(schema: str):
+    app_account = schema.upper().split('_OWNER')[0]
+    addGrantsExec.append({"schema": schema, 
+                          "proc": f'{app_account}_HISTORY', 
+                          "user": app_account
+                          })
+
+
+def createGrantLoader(schema: str):
+    app_account = schema.upper().split('_OWNER')[0]
+    addGrantsExec.append((schema, f'{app_account}_LOADER', app_account))
 
 
 def generateHistoryTables(table: Table, tableNum: int):
@@ -460,6 +660,15 @@ def processTable(table: Table):
     
     # Process compound indexes and remove any invalid entries
     table.cleanCompoundIndex()
+
+    # If table needs to be included in Loader package, do this now
+    if table.needsloader:
+        tables = [table]
+        localtable = table
+        while localtable.loaderParent != None:
+            localtable = localtable.loaderParent
+            tables.append(localtable)
+        sql.addToLoaderPackage(table.schema, tables)
 
     # If Gen History Table is True, create history table object and process for scripts
     if table.needshistory:
@@ -506,6 +715,12 @@ def processTable(table: Table):
 
     # Write table script to file
     sql.writeTableScript(table.schema, table.name, table.genColumnList(), table.tablespace)
+
+    if table.ishistory:
+        level = ('','','')
+    else:
+        level = ('X','X','X')
+    createGrant(table.schema, table.name, level)
 
     # Process all columns individually (cannot be multi-threaded due to shared index and FK counts per table)
     for col in table.columns:
@@ -604,6 +819,10 @@ def addGrant(grant):
     logger.debug(f'Adding GRANT of {level} to {grant["user"]} on {grant["schema"]}.{grant["table"]}')
     sql.addGrant(grant["schema"], grant["table"], grant["user"], level)
 
+def addGrantExec(grant):
+    logger.debug(f'Adding GRANT of EXECUTE to {grant["user"]} on {grant["schema"]}.{grant["proc"]}')
+    sql.addGrantExec(grant["schema"], grant["proc"], grant["user"])
+
 
 def main():
     """
@@ -613,7 +832,9 @@ def main():
     """
 
     cleandir = False
-    if os.path.exists(outputDir):
+    if os.getcwd() == os.path.realpath(outputDir):
+        logger.error(f'Unable to write to working directory. Please specify a subfolder such as ".\\output"')
+    elif os.path.exists(outputDir):
         # Try to delete output directory
         try: 
             shutil.rmtree(outputDir)
@@ -647,12 +868,18 @@ def main():
             # If schema.table not in table dict: add new Table, then add column
             else:
                 logger.debug(f'New table: {schematable}')
+                if row["loader_parent_table"] != '':
+                    loaderParent = tables[f'{row["schema"]}.{row["loader_parent_table"]}']
+                else:
+                    loaderParent = None
                 tables[schematable] = Table(row["schema"], 
                                             row["table"], 
                                             row["gen_audit_columns"], 
                                             row["gen_history_tables"], 
+                                            row["loader_package"],
                                             row["table_comment"],
-                                            tableCount)
+                                            tableCount,
+                                            loaderParent=loaderParent)
                 tableCount += 1
                 newcol = Column()
                 newcol.load(row)
@@ -667,15 +894,31 @@ def main():
         # Process each table and generate scripts
         with ThreadPoolExecutor(threads) as pool:
             pool.map(processTable, (tables[key] for key in tables.keys()))
+        #for key in tables.keys():
+        #    processTable(tables[key])
 
         # If 'use-procedure' setting is on, complete history package and write to file
         if history_package:
             logger.info('Saving history writing procedures to package')
-            sql.writeHistoryPackage()
+            schemas = sql.writeHistoryPackage()
+            for schema in schemas:
+                createGrantHistory(schema)
+
+        if loader_package:
+            logger.info('Saving Loader package to file')
+            schemas = sql.writeLoaderPackage()
+            for schema in schemas:
+                createGrantLoader(schema)
 
         # Write comments to file
         logger.info('Saving Comments for all tables and columns')
         sql.writeComments()
+
+        if todoGrants == []:
+            writeGrants(xlsxFile)
+        
+        if todoGrantsExecute == []:
+            writeGrantsExec(xlsxFile)
 
         # Read Grants CSV and process contents
         if fileType.lower() == 'csv':
@@ -684,6 +927,12 @@ def main():
             pool.map(addGrant, todoGrants)
         logger.info('Saving Grants for all tables')
         sql.writeGrants()
+
+        # Write EXECUTE Grants
+        with ThreadPoolExecutor(threads) as pool:
+            pool.map(addGrantExec, todoGrantsExecute)
+        logger.info('Saving Grants for all Executables')
+        sql.writeGrantsExec()
 
         # Generate build.sql script in root of output
         logger.info('Writing final scripts to directory')

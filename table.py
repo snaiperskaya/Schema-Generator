@@ -62,6 +62,10 @@ class Table:
         NOTE: Should be run before audit column injection to exclude audit columns from history
     ishistory: bool
         Flag for if table is a history table
+    needsloader: bool
+        Flag for whether table should be included in Loader package
+    loaderParent: Table
+        Parent table of current table for Loader package
     indexcount: int
         Count of indexes on the table. Incremented to generate unique scripts
     fkcount: int
@@ -107,7 +111,18 @@ class Table:
         Regens column lists when done
     """
 
-    def __init__(self, schema: str, tablename: str, genAudit: str, genHistory: str, comment: str, tableNumber: int = 1, historyTable: bool = False, histSourceTableName: str = ''):
+    def __init__(self, 
+                schema: str, 
+                tablename: str, 
+                genAudit: str, 
+                genHistory: str,
+                genLoader: str,
+                comment: str, 
+                tableNumber: int = 1, 
+                historyTable: bool = False, 
+                histSourceTableName: str = '',
+                loaderParent: Table = None
+                ):
         """
         __init__(schema, tablename, genAudit, genHistory, comment, tableNumber, historyTable, historySourceTableName)
 
@@ -132,7 +147,11 @@ class Table:
             historyTable: bool
                 Flag to show whether current table is, in fact, a history table
             historySourceTableName: str
-                If historyTable is True, this is the name of the original table the history table is based on            
+                If historyTable is True, this is the name of the original table the history table is based on   
+            includeLoader: bool
+                Should this table be included in Loader Package
+            loaderParent: Table
+                Table that is the parent to the current table         
         """
 
         self.schema = schema
@@ -150,6 +169,8 @@ class Table:
         self.needsaudit = False
         self.needshistory = False
         self.ishistory = historyTable
+        self.needsloader = False
+        self.loaderParent = loaderParent
         self.indexcount = 1
         self.fkcount = 1
 
@@ -158,6 +179,9 @@ class Table:
         
         if genHistory.upper() == 'Y':
             self.needshistory = True
+        
+        if genLoader.upper() == 'Y':
+            self.needsloader = True
 
     def addColumn(self, col: Column):
         """

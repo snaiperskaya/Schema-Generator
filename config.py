@@ -3,7 +3,7 @@
 """config.py: Module for creating and loading .json config file"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "23.01.25.0"
+__version__ = "23.02.03.0"
 
 import json
 import os
@@ -27,8 +27,8 @@ class Config:
                     'setting': '.\\output'
                 },
                 'schema-file-type': {
-                    'desc': "File-type used for schema outline ('xlsx' OR 'csv'). Default: 'csv'",
-                    'setting': 'csv'
+                    'desc': "File-type used for schema outline ('xlsx' OR 'csv'). Default: 'xlsx'",
+                    'setting': 'xlsx'
                 },
                 'schema-file': {
                     'desc': "File for generating Schema and Grants (XLSX). Schema and Grants will go on separate workbook pages. Default: '.\\Schema.xlsx'",
@@ -72,8 +72,16 @@ class Config:
                     'desc': "Use procedures / package structure for table loaders. Default: false",
                     'setting': False
                 },
+                'enforce-char-lengths': {
+                    'desc': "Use substr() to trim strings to fit fields. Default: false",
+                    'setting': False
+                },
                 'use-logging': {
                     'desc': "Implement PL/SQL logging in procedures. Default: false",
+                    'setting': False
+                },
+                'include-delete': {
+                    'desc': "Include procedures for processing deletes from loader tables. Default: false",
                     'setting': False
                 }
             },
