@@ -3,7 +3,7 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "23.02.06.3"
+__version__ = "23.02.06.4"
 
 import os
 import copy
@@ -1211,7 +1211,7 @@ def addInsertUpdateToLoaderPackage(schema: str, tables: list):
         log_cdbg = f'{tab}c_dbg constant number(1) := is_debug_(\'{tablespace}_LOADER\',\'LOAD_{tablename}\');\n'
         log_appinfo = f'{tab}if (trim(p_in_clientid) is not null) then do_app_info_(\'{tablespace}_LOADER\', \'LOAD_{tablename}\', p_in_clientid); end if;\n'
         log_debug = f'{tab}if c_dbg = 1 then {tablespace}_LOGGER.LOGGING_UTL.LOG(p_out_message, \'{tablespace}_LOADER.{proc_name}\'); end if;\n'
-        log_closeappinfo = f'{tab}if (trim(client_id_in) is not null) then {tablespace}_LOGGER.do_app_info; end if;\n'
+        log_closeappinfo = f'{tab}if (trim(p_in_clientid) is not null) then do_app_info_; end if;\n'
 
     # Populate HEADER template for PACKAGE
     to_save_header = f'{tab}PROCEDURE {proc_name}\n' \
@@ -1229,7 +1229,7 @@ def addInsertUpdateToLoaderPackage(schema: str, tables: list):
                     f'{tab}) IS\n' \
                     f'{tab*2}l_stack VARCHAR2(4000);\n' \
                     f'{tab*2}l_cnt NUMBER;\n' \
-                    f'{tab*2}parent_failed EXCEPTION;' \
+                    f'{tab*2}parent_failed EXCEPTION;\n' \
                     f'{tab}{log_cdbg}' \
                     f'{tab}BEGIN\n' \
                     f'{tab}{log_appinfo}' \
@@ -1415,7 +1415,7 @@ def addDeleteToLoaderPackage(schema: str, tables: list):
         log_cdbg = f'{tab}c_dbg constant number(1) := is_debug_(\'{tablespace}_LOADER\',\'LOAD_{tablename}\');\n'
         log_appinfo = f'{tab}if (trim(p_in_clientid) is not null) then do_app_info_(\'{tablespace}_LOADER\', \'LOAD_{tablename}\', p_in_clientid); end if;\n'
         log_debug = f'{tab}if c_dbg = 1 then {tablespace}_LOGGER.LOGGING_UTL.LOG(p_out_message, \'{tablespace}_LOADER.{proc_name}\'); end if;\n'
-        log_closeappinfo = f'{tab}if (trim(client_id_in) is not null) then {tablespace}_LOGGER.do_app_info; end if;\n'
+        log_closeappinfo = f'{tab}if (trim(p_in_clientid) is not null) then do_app_info_; end if;\n'
 
     # Populate HEADER template for PACKAGE
     to_save_header = f'{tab}PROCEDURE {proc_name}\n' \
@@ -1433,7 +1433,7 @@ def addDeleteToLoaderPackage(schema: str, tables: list):
                     f'{tab}) IS\n' \
                     f'{tab*2}l_stack VARCHAR2(4000);\n' \
                     f'{tab*2}l_cnt NUMBER;\n' \
-                    f'{tab*2}parent_failed EXCEPTION;' \
+                    f'{tab*2}parent_failed EXCEPTION;\n' \
                     f'{tab}{log_cdbg}' \
                     f'{tab}BEGIN\n' \
                     f'{tab}{log_appinfo}' \
