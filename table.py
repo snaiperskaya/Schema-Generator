@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "23.01.19.0"
+__version__ = "23.02.06.7"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -62,6 +62,10 @@ class Table:
         NOTE: Should be run before audit column injection to exclude audit columns from history
     ishistory: bool
         Flag for if table is a history table
+    needsloader: bool
+        Flag for whether table should be included in Loader package
+    loaderParent: Table
+        Parent table of current table for Loader package
     indexcount: int
         Count of indexes on the table. Incremented to generate unique scripts
     fkcount: int
@@ -107,7 +111,18 @@ class Table:
         Regens column lists when done
     """
 
-    def __init__(self, schema: str, tablename: str, genAudit: str, genHistory: str, comment: str, tableNumber: int = 1, historyTable: bool = False, histSourceTableName: str = ''):
+    def __init__(self, 
+                schema: str, 
+                tablename: str, 
+                genAudit: str, 
+                genHistory: str,
+                genLoader: str,
+                comment: str, 
+                tableNumber: int = 1, 
+                historyTable: bool = False, 
+                histSourceTableName: str = '',
+                loaderParent: Table = None
+                ):
         """
         __init__(schema, tablename, genAudit, genHistory, comment, tableNumber, historyTable, historySourceTableName)
 
@@ -132,7 +147,11 @@ class Table:
             historyTable: bool
                 Flag to show whether current table is, in fact, a history table
             historySourceTableName: str
-                If historyTable is True, this is the name of the original table the history table is based on            
+                If historyTable is True, this is the name of the original table the history table is based on   
+            includeLoader: bool
+                Should this table be included in Loader Package
+            loaderParent: Table
+                Table that is the parent to the current table         
         """
 
         self.schema = schema
@@ -150,6 +169,8 @@ class Table:
         self.needsaudit = False
         self.needshistory = False
         self.ishistory = historyTable
+        self.needsloader = False
+        self.loaderParent = loaderParent
         self.indexcount = 1
         self.fkcount = 1
 
@@ -158,6 +179,9 @@ class Table:
         
         if genHistory.upper() == 'Y':
             self.needshistory = True
+        
+        if genLoader.upper() == 'Y':
+            self.needsloader = True
 
     def addColumn(self, col: Column):
         """
@@ -465,7 +489,7 @@ class Table:
                 tableNum = self.tableNumber
             # Create new Table
             # Disable Audit and History, name table H_<sourcetablename>, add comment, set historyTable to True and set source name
-            histTable = Table(self.schema, f'H_{self.name}', 'N', 'N', f'History table for {self.name}', tableNum, True, self.name)
+            histTable = Table(self.schema, f'H_{self.name}', 'N', 'N', 'N', f'History table for {self.name}', tableNum, True, self.name)
 
             # Spawn 2 history columns (HIST_ID, CHANGE) and add to new table
             # Done first to position them at beginning of table
@@ -626,8 +650,9 @@ class Column:
         self.lob_compress = None
         self.lob_cache = False
         self.lob_logging = False
+        self.isaudit = False
 
-    def load(self, csvrow: dict):
+    def load(self, csvrow: dict, isAudit: bool = False):
         """
         load(csvrow)
 
@@ -771,6 +796,8 @@ class Column:
             # If CSV value is invalid or blank, use default from config file
             elif lob_defaults["logging"].upper() == 'Y':
                 self.lob_logging = True
+            
+        self.isaudit = isAudit
     
     def getTypeString(self) -> str:
         """
@@ -892,7 +919,7 @@ def spawnAuditColumns(schema: str, tablename: str) -> tuple:
     u_name["column_comment"] = 'User Name for audit logging purposes'
 
     col1 = Column()
-    col1.load(u_name)
+    col1.load(u_name, True)
     
     #Add U_DATE column
     u_date = default_schema_row.copy()
@@ -905,7 +932,7 @@ def spawnAuditColumns(schema: str, tablename: str) -> tuple:
     u_date["column_comment"] = 'Date / Time for audit logging purposes'
 
     col2 = Column()
-    col2.load(u_date)
+    col2.load(u_date, True)
 
     return (col1, col2)
 

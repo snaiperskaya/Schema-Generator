@@ -2,7 +2,10 @@
 *.log
 build
 buildExe.cmd
+buildExe.bat
+broken-BuildExe.bat
 runme.cmd
+runme.bat
 *input/
 *output/
 *.csv
