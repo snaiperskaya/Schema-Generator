@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "23.01.19.0"
+__version__ = "23.02.06.0"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -489,7 +489,7 @@ class Table:
                 tableNum = self.tableNumber
             # Create new Table
             # Disable Audit and History, name table H_<sourcetablename>, add comment, set historyTable to True and set source name
-            histTable = Table(self.schema, f'H_{self.name}', 'N', 'N', f'History table for {self.name}', tableNum, True, self.name)
+            histTable = Table(self.schema, f'H_{self.name}', 'N', 'N', 'N', f'History table for {self.name}', tableNum, True, self.name)
 
             # Spawn 2 history columns (HIST_ID, CHANGE) and add to new table
             # Done first to position them at beginning of table

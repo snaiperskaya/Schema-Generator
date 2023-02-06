@@ -3,7 +3,7 @@
 """schema_generator.py: Main module to parse csv and generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "23.02.03.0"
+__version__ = "23.02.06.0"
 
 import logging
 import os
@@ -886,7 +886,7 @@ def main():
                 tables[schematable].addColumn(newcol)
         logger.info('All tables and fields loaded')
         
-        holdTables = tables.copy()
+        holdTables = copy.deepcopy(tables)
         # Extract and create History Tables
         for key in holdTables.keys():
             generateHistoryTables(holdTables[key], tableCount)
