@@ -3,7 +3,7 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "23.02.06.6"
+__version__ = "23.02.06.7"
 
 import os
 import copy
@@ -1047,7 +1047,7 @@ def addInsertUpdateToLoaderPackage(schema: str, tables: list):
             tablenames.append(table.name.upper())
             parentLoadColumns = []
         for col in table.columns:
-            if (not col.virtual and not col.isaudit) or col.primarykey:
+            if col.primarykey or (not col.virtual and not col.isaudit):
                 columns.append((col, table.name))
                 if isParent:
                     parentLoadColumns.append(col)

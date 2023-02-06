@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "23.02.06.6"
+__version__ = "23.02.06.7"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -797,7 +797,7 @@ class Column:
             elif lob_defaults["logging"].upper() == 'Y':
                 self.lob_logging = True
             
-            self.isaudit = isAudit
+        self.isaudit = isAudit
     
     def getTypeString(self) -> str:
         """
