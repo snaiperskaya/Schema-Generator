@@ -3,7 +3,7 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "23.02.06.0"
+__version__ = "23.02.06.1"
 
 import os
 import copy
@@ -1090,6 +1090,7 @@ def addInsertUpdateToLoaderPackage(schema: str, tables: list):
         # Set IN OUT Type. Determine if field is primarykey
         io = ('IN', 'in')
         excludeIU = False
+        defaultNull = ''
         if firstPrimary and col[0].primarykey:
             io = ('IN OUT', 'io')
             primaryKey = col[0]
@@ -1104,15 +1105,14 @@ def addInsertUpdateToLoaderPackage(schema: str, tables: list):
             formatted_insert_values = formatted_insert_values.replace(oldio, newio)
             formatted_update_columns = formatted_update_columns.replace(oldio, newio)
             formatted_update_where = formatted_update_where.replace(oldio, newio)
-        
+        else:
         # Add DEFAULT NULL to parameter for any nullable fields
-        defaultNull = ''
-        if not col[0].notnull or col[0].default != None:
-            defaultNull = f'{tab}DEFAULT NULL'
-        elif hasMultiTable and col[0].fksourcetable != None and col[0].fksourcetable.upper() in tablenames:
-            defaultNull = f'{tab}DEFAULT NULL'
-        elif col[0].triggered:
-            defaultNull = f'{tab}DEFAULT NULL'
+            if not col[0].notnull or col[0].default != None:
+                defaultNull = f'{tab}DEFAULT NULL'
+            elif hasMultiTable and col[0].fksourcetable != None and col[0].fksourcetable.upper() in tablenames:
+                defaultNull = f'{tab}DEFAULT NULL'
+            elif col[0].triggered:
+                defaultNull = f'{tab}DEFAULT NULL'
         
         # Format spacing 
         if len(name) > table_min_spacing:
