@@ -4,7 +4,7 @@ from __future__ import annotations
 """table.py: Module provided classes for structure / organization"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "23.02.06.0"
+__version__ = "23.02.06.6"
 
 from schema_generator import config, logger, default_schema_row
 
@@ -650,8 +650,9 @@ class Column:
         self.lob_compress = None
         self.lob_cache = False
         self.lob_logging = False
+        self.isaudit = False
 
-    def load(self, csvrow: dict):
+    def load(self, csvrow: dict, isAudit: bool = False):
         """
         load(csvrow)
 
@@ -795,6 +796,8 @@ class Column:
             # If CSV value is invalid or blank, use default from config file
             elif lob_defaults["logging"].upper() == 'Y':
                 self.lob_logging = True
+            
+            self.isaudit = isAudit
     
     def getTypeString(self) -> str:
         """
@@ -916,7 +919,7 @@ def spawnAuditColumns(schema: str, tablename: str) -> tuple:
     u_name["column_comment"] = 'User Name for audit logging purposes'
 
     col1 = Column()
-    col1.load(u_name)
+    col1.load(u_name, True)
     
     #Add U_DATE column
     u_date = default_schema_row.copy()
@@ -929,7 +932,7 @@ def spawnAuditColumns(schema: str, tablename: str) -> tuple:
     u_date["column_comment"] = 'Date / Time for audit logging purposes'
 
     col2 = Column()
-    col2.load(u_date)
+    col2.load(u_date, True)
 
     return (col1, col2)
 
