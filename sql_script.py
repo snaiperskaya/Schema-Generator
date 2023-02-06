@@ -3,7 +3,7 @@
 """sql_script.py: Module containing the strings and code needed to generate and save SQL (Oracle) DDL Scripts"""
 
 __author__ = "Cody Putnam (csp05)"
-__version__ = "23.02.06.4"
+__version__ = "23.02.06.5"
 
 import os
 import copy
@@ -1531,7 +1531,7 @@ def writeLoaderPackage(outdirectory: str = outputDir) -> list:
                             f'{tab*2}, client_in IN VARCHAR2 DEFAULT NULL\n'\
                             f'{tab}) RETURN NUMBER IS\n' \
                             f'{tab}BEGIN\n' \
-                            f'{tab*2}RETURN {app_account}_logger.logging_utl.is_debug(module_in => module_in, method_in => method_in, client_id_in => client_id_in );\n' \
+                            f'{tab*2}RETURN {app_account}_logger.logging_utl.is_debug(module_in => module_in, method_in => method_in, client_id_in => client_in );\n' \
                             f'{tab}END is_debug_;\n' \
                             f'-------------------------------------------------------------------------------\n\n' \
                             f'-------------------------------------------------------------------------------\n' \
